@@ -1,0 +1,3 @@
+{"claim_id": "CLM-90005", "member_id": "MBR-20001", "provider": "Harbor Physical Therapy", "procedure": "PT_VISIT",
+ "amount": null, "diagnosis_code": null, "plan": "SILVER_HMO", "prior_authorization": false,
+ "date_of_service": "2026-08-19", "emergency_indicator": false, "provider_network": "IN"}

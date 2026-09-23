@@ -1,0 +1,13 @@
+services:
+  claimpilot:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - audit-data:/data
+
+volumes:
+  audit-data:

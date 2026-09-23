@@ -1,0 +1,3 @@
+{"claim_id": "CLM-90003", "member_id": "MBR-10045", "provider": "Lakeside Orthopedic Surgery Center", "procedure": "KNEE_ARTHROSCOPY",
+ "amount": 14500, "diagnosis_code": "S83.241A", "plan": "GOLD_PPO", "prior_authorization": true,
+ "date_of_service": "2026-07-22", "emergency_indicator": false, "provider_network": "IN"}

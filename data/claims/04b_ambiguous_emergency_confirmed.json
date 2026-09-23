@@ -1,0 +1,3 @@
+{"claim_id": "CLM-92811", "member_id": "MBR-10023", "provider": "Northwind Imaging Center", "procedure": "MRI_KNEE",
+ "amount": 1840, "diagnosis_code": "M25.561", "plan": "GOLD_PPO", "prior_authorization": false,
+ "date_of_service": "2026-09-10", "emergency_indicator": true, "provider_network": "IN"}

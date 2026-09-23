@@ -1,0 +1,5 @@
+[
+  {"auth_id": "PA-55001", "member_id": "MBR-10045", "procedure": "MRI_KNEE",   "status": "APPROVED", "valid_from": "2026-05-01", "valid_to": "2026-08-31"},
+  {"auth_id": "PA-55002", "member_id": "MBR-10031", "procedure": "MRI_LUMBAR", "status": "APPROVED", "valid_from": "2026-04-01", "valid_to": "2026-12-31"},
+  {"auth_id": "PA-55003", "member_id": "MBR-10023", "procedure": "MRI_KNEE",   "status": "EXPIRED",  "valid_from": "2025-09-01", "valid_to": "2025-11-30"}
+]

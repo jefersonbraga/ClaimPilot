@@ -1,0 +1,425 @@
+[
+  {
+    "case_id": "routine-lab",
+    "description": "Routine lab, active member",
+    "claim": {
+      "claim_id": "EV-01",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "LAB_LIPID_PANEL",
+      "amount": 62,
+      "diagnosis_code": "E78.5",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-07-14",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-LAB-009"
+    ]
+  },
+  {
+    "case_id": "mri-below-threshold",
+    "description": "Knee MRI below the 2026 PA threshold",
+    "claim": {
+      "claim_id": "EV-02",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1200,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-08-01",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-MRI-001"
+    ]
+  },
+  {
+    "case_id": "mri-pa-missing",
+    "description": "Knee MRI above threshold, no PA, not an emergency",
+    "claim": {
+      "claim_id": "EV-03",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-08-03",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "DENY",
+    "expected_policy_ids": [
+      "POL-MRI-001"
+    ]
+  },
+  {
+    "case_id": "mri-emergency-unknown",
+    "description": "WOW case: PA missing, emergency exemption exists, emergency status unknown",
+    "claim": {
+      "claim_id": "EV-04",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-09-10",
+      "emergency_indicator": null,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-MRI-001",
+      "POL-EMRG-002"
+    ]
+  },
+  {
+    "case_id": "mri-emergency-confirmed",
+    "description": "WOW case after the analyst confirms the emergency",
+    "claim": {
+      "claim_id": "EV-05",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-09-10",
+      "emergency_indicator": true,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-MRI-001",
+      "POL-EMRG-002"
+    ]
+  },
+  {
+    "case_id": "mri-2025-v1-threshold",
+    "description": "2025 date of service: v1 threshold ($2,000) applies",
+    "claim": {
+      "claim_id": "EV-06",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2025-10-01",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-MRI-001"
+    ]
+  },
+  {
+    "case_id": "mri-2025-over-v1",
+    "description": "2025 date of service above the v1 threshold, no PA",
+    "claim": {
+      "claim_id": "EV-07",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 2400,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2025-10-01",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "DENY",
+    "expected_policy_ids": [
+      "POL-MRI-001"
+    ]
+  },
+  {
+    "case_id": "mri-possible-duplicate",
+    "description": "Valid PA but same procedure paid 11 days earlier",
+    "claim": {
+      "claim_id": "EV-08",
+      "member_id": "MBR-10045",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1790,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": true,
+      "date_of_service": "2026-07-01",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-DUP-006"
+    ]
+  },
+  {
+    "case_id": "mri-valid-pa",
+    "description": "Valid PA on file, outside the duplicate window",
+    "claim": {
+      "claim_id": "EV-09",
+      "member_id": "MBR-10045",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1790,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": true,
+      "date_of_service": "2026-08-25",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-MRI-001"
+    ]
+  },
+  {
+    "case_id": "pa-claimed-not-on-file",
+    "description": "Claim says PA obtained but no record exists",
+    "claim": {
+      "claim_id": "EV-10",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": true,
+      "date_of_service": "2026-08-12",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-MRI-001"
+    ]
+  },
+  {
+    "case_id": "regional-policy-conflict",
+    "description": "Regional addendum and national policy disagree",
+    "claim": {
+      "claim_id": "EV-11",
+      "member_id": "MBR-10031",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1250,
+      "diagnosis_code": "M23.205",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-06-11",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-MRI-001",
+      "POL-IMG-010"
+    ]
+  },
+  {
+    "case_id": "regional-policies-agree",
+    "description": "Both regional and national policy require PA; none on file",
+    "claim": {
+      "claim_id": "EV-12",
+      "member_id": "MBR-10031",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M23.205",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-06-11",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "DENY",
+    "expected_policy_ids": [
+      "POL-MRI-001",
+      "POL-IMG-010"
+    ]
+  },
+  {
+    "case_id": "high-value-surgery",
+    "description": "High-value claim must go to a human",
+    "claim": {
+      "claim_id": "EV-13",
+      "member_id": "MBR-10045",
+      "provider": "Synthetic Provider",
+      "procedure": "KNEE_ARTHROSCOPY",
+      "amount": 14500,
+      "diagnosis_code": "S83.241A",
+      "plan": "GOLD_PPO",
+      "prior_authorization": true,
+      "date_of_service": "2026-07-22",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-FIN-004"
+    ]
+  },
+  {
+    "case_id": "inactive-member",
+    "description": "Coverage terminated before date of service",
+    "claim": {
+      "claim_id": "EV-14",
+      "member_id": "MBR-10024",
+      "provider": "Synthetic Provider",
+      "procedure": "LAB_CBC",
+      "amount": 45,
+      "diagnosis_code": "D64.9",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-05-01",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "DENY",
+    "expected_policy_ids": [
+      "POL-ELIG-003"
+    ]
+  },
+  {
+    "case_id": "pt-within-limit",
+    "description": "PT visit within the annual limit",
+    "claim": {
+      "claim_id": "EV-15",
+      "member_id": "MBR-20001",
+      "provider": "Synthetic Provider",
+      "procedure": "PT_VISIT",
+      "amount": 140,
+      "diagnosis_code": "M54.50",
+      "plan": "SILVER_HMO",
+      "prior_authorization": false,
+      "date_of_service": "2026-08-19",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-PT-007"
+    ]
+  },
+  {
+    "case_id": "pt-limit-exhausted",
+    "description": "PT visit after the annual limit is exhausted",
+    "claim": {
+      "claim_id": "EV-16",
+      "member_id": "MBR-20002",
+      "provider": "Synthetic Provider",
+      "procedure": "PT_VISIT",
+      "amount": 140,
+      "diagnosis_code": "M54.50",
+      "plan": "SILVER_HMO",
+      "prior_authorization": false,
+      "date_of_service": "2026-08-19",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "DENY",
+    "expected_policy_ids": [
+      "POL-PT-007"
+    ]
+  },
+  {
+    "case_id": "hmo-out-of-network",
+    "description": "HMO member, out-of-network provider, not an emergency",
+    "claim": {
+      "claim_id": "EV-17",
+      "member_id": "MBR-20001",
+      "provider": "Synthetic Provider",
+      "procedure": "OFFICE_VISIT",
+      "amount": 210,
+      "diagnosis_code": "J06.9",
+      "plan": "SILVER_HMO",
+      "prior_authorization": false,
+      "date_of_service": "2026-07-02",
+      "emergency_indicator": false,
+      "provider_network": "OUT"
+    },
+    "expected_recommendation": "DENY",
+    "expected_policy_ids": [
+      "POL-NET-008"
+    ]
+  },
+  {
+    "case_id": "hmo-oon-emergency-unknown",
+    "description": "HMO out-of-network, emergency status unknown",
+    "claim": {
+      "claim_id": "EV-18",
+      "member_id": "MBR-20001",
+      "provider": "Synthetic Provider",
+      "procedure": "OFFICE_VISIT",
+      "amount": 210,
+      "diagnosis_code": "J06.9",
+      "plan": "SILVER_HMO",
+      "prior_authorization": false,
+      "date_of_service": "2026-07-02",
+      "emergency_indicator": null,
+      "provider_network": "OUT"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-NET-008",
+      "POL-EMRG-002"
+    ]
+  },
+  {
+    "case_id": "incomplete-claim",
+    "description": "Amount and diagnosis missing",
+    "claim": {
+      "claim_id": "EV-19",
+      "member_id": "MBR-20001",
+      "provider": "Synthetic Provider",
+      "procedure": "PT_VISIT",
+      "amount": null,
+      "diagnosis_code": null,
+      "plan": "SILVER_HMO",
+      "prior_authorization": false,
+      "date_of_service": "2026-08-19",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": []
+  },
+  {
+    "case_id": "unknown-member",
+    "description": "Member not found in enrollment",
+    "claim": {
+      "claim_id": "EV-20",
+      "member_id": "MBR-99999",
+      "provider": "Synthetic Provider",
+      "procedure": "LAB_CBC",
+      "amount": 45,
+      "diagnosis_code": "D64.9",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-05-01",
+      "emergency_indicator": false,
+      "provider_network": "IN"
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
+    "expected_policy_ids": [
+      "POL-ELIG-003"
+    ]
+  }
+]

@@ -1,0 +1,3 @@
+{"claim_id": "CLM-90006", "member_id": "MBR-10031", "provider": "Beacon Hill Imaging", "procedure": "MRI_KNEE",
+ "amount": 1250, "diagnosis_code": "M23.205", "plan": "GOLD_PPO", "prior_authorization": false,
+ "date_of_service": "2026-06-11", "emergency_indicator": false, "provider_network": "IN"}

@@ -1,0 +1,6 @@
+[
+  {"claim_id": "CLM-80001", "member_id": "MBR-10045", "procedure": "MRI_KNEE",  "date_of_service": "2026-06-20", "amount": 1790, "status": "PAID"},
+  {"claim_id": "CLM-80002", "member_id": "MBR-20002", "procedure": "PT_VISIT",  "date_of_service": "2026-01-15", "amount": 140,  "status": "PAID", "units": 20},
+  {"claim_id": "CLM-80003", "member_id": "MBR-20001", "procedure": "PT_VISIT",  "date_of_service": "2026-02-10", "amount": 140,  "status": "PAID", "units": 6},
+  {"claim_id": "CLM-80004", "member_id": "MBR-10023", "procedure": "LAB_CBC",   "date_of_service": "2026-02-02", "amount": 45,   "status": "PAID"}
+]

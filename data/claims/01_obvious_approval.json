@@ -1,0 +1,3 @@
+{"claim_id": "CLM-90001", "member_id": "MBR-10023", "provider": "Riverside Family Lab", "procedure": "LAB_LIPID_PANEL",
+ "amount": 62, "diagnosis_code": "E78.5", "plan": "GOLD_PPO", "prior_authorization": false,
+ "date_of_service": "2026-07-14", "emergency_indicator": false, "provider_network": "IN"}

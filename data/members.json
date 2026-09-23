@@ -1,0 +1,9 @@
+[
+  {"member_id": "MBR-10023", "plan": "GOLD_PPO",   "status": "ACTIVE",     "coverage_start": "2024-01-01", "coverage_end": null,         "region": "SOUTHEAST"},
+  {"member_id": "MBR-10024", "plan": "GOLD_PPO",   "status": "TERMINATED", "coverage_start": "2023-01-01", "coverage_end": "2026-03-31", "region": "SOUTHEAST"},
+  {"member_id": "MBR-10031", "plan": "GOLD_PPO",   "status": "ACTIVE",     "coverage_start": "2025-06-01", "coverage_end": null,         "region": "NORTHEAST"},
+  {"member_id": "MBR-10045", "plan": "GOLD_PPO",   "status": "ACTIVE",     "coverage_start": "2022-01-01", "coverage_end": null,         "region": "MIDWEST"},
+  {"member_id": "MBR-20001", "plan": "SILVER_HMO", "status": "ACTIVE",     "coverage_start": "2024-01-01", "coverage_end": null,         "region": "WEST"},
+  {"member_id": "MBR-20002", "plan": "SILVER_HMO", "status": "ACTIVE",     "coverage_start": "2025-01-01", "coverage_end": null,         "region": "WEST"},
+  {"member_id": "MBR-30001", "plan": "BRONZE_EPO", "status": "ACTIVE",     "coverage_start": "2025-01-01", "coverage_end": null,         "region": "MIDWEST"}
+]
