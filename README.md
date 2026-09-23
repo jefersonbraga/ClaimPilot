@@ -49,6 +49,8 @@ The metrics that would prove it in a pilot: analyst handle time per exception, t
 
 ## Architecture
 
+> 📐 Full design documentation, with UML class, sequence, state and activity diagrams, an ER model, the policy-versioning timeline and deployment views, is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
 ```mermaid
 flowchart TD
     Client([Analyst / upstream system]) -->|POST /claims/analyze| API[FastAPI]
