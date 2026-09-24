@@ -1,5 +1,7 @@
 # ClaimPilot — Healthcare Claims AI Investigator
 
+[![CI](https://github.com/jefersonbraga/ClaimPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/jefersonbraga/ClaimPilot/actions/workflows/ci.yml)
+
 ClaimPilot is an independent technical demonstration of an AI-assisted claims exception investigation workflow using synthetic healthcare data.
 
 - **No real PHI** is used. Every member, claim, provider and policy in this repository is synthetic.
@@ -108,8 +110,10 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       50 behaviour tests + 8 browser tests for the UI
+tests/                       51 behaviour tests + 8 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
+.github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
+railway.json                 deployment settings (Railway)
 ```
 
 ---
@@ -285,7 +289,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 50 tests
+pytest                              # 51 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
@@ -335,24 +339,13 @@ docker compose run --rm claimpilot python -m pytest -p no:cacheprovider
 
 When a limit is hit the API returns `429` before any LLM call, and `/health` shows current usage. The counters live in process memory, which is enough for one container; several replicas would need a shared store. Also set a **hard monthly spend limit on the key itself** in the provider's dashboard, ideally with a dedicated key for this demo. That is the backstop if everything else fails.
 
-### Deploying (single container)
+### Deploying
 
-The image is the whole app: API, UI and evaluation snapshot. Any container host works. For Google Cloud Run:
+One container: API, UI and evaluation snapshot. Deployment is automated:
 
-```bash
-# key goes to Secret Manager: never into the repo, the image or shell history
-read -s KEY && printf %s "$KEY" | gcloud secrets create deepseek-key --data-file=- && unset KEY
+`git push` → **GitHub Actions CI** (tests, evaluation gate with zero unsafe actions, browser tests, Docker health) → **Railway** deploys `main` only if CI passed ("Wait for CI"), and switches traffic after `/health` responds.
 
-gcloud run deploy claimpilot --source . --region us-central1 --port 8000 \
-  --allow-unauthenticated --max-instances 1 --memory 512Mi \
-  --set-env-vars LLM_PROVIDER=deepseek,DAILY_LLM_BUDGET_USD=1 \
-  --set-secrets DEEPSEEK_API_KEY=deepseek-key:latest
-```
-
-- `--max-instances 1`: the rate-limit and budget counters live in memory, so one instance makes them global.
-- The container runs uvicorn with `--proxy-headers`, so the per-client limit sees the visitor's IP rather than the platform proxy's.
-- The SQLite audit is ephemeral on Cloud Run (lost when the instance restarts). That is fine for a demo; production would use a managed database.
-- Keep only a small prepaid balance on the provider account. It is the final cap on spend.
+Platform settings are versioned in `railway.json`. Keys live only in the platform's variables. Step-by-step setup for Railway, plus the Google Cloud Run alternative, is in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ### API
 

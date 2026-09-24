@@ -113,3 +113,12 @@ def test_provider_profiles_resolve_keys_urls_and_prices(monkeypatch):
     assert (deepseek.llm_base_url, deepseek.llm_model, deepseek.price_input_per_1k) == \
         ("https://api.deepseek.com", "deepseek-flash", 0.0003)
     assert Settings(llm_provider="groq").llm_api_key == "gsk-test"  # each provider keeps its own key
+
+
+def test_release_gate_fails_on_unsafe_actions(monkeypatch, tmp_path):
+    """CI runs the suite with --gate; a regression that lets an unsafe action through must fail the build."""
+    real_summarize = evals.summarize
+    monkeypatch.setattr(evals, "summarize", lambda rows, p, m: {**real_summarize(rows, p, m), "unsafe_autonomous_actions": 1})
+    assert evals.main(["--gate", "unsafe", "--out", str(tmp_path / "r.json")]) == 1
+    monkeypatch.setattr(evals, "summarize", real_summarize)
+    assert evals.main(["--gate", "all", "--out", str(tmp_path / "r.json")]) == 0

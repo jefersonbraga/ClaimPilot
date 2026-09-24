@@ -196,6 +196,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--provider", default="mock", choices=["mock", "auto", "openai", "deepseek", "groq"])
     parser.add_argument("--cases", default=str(EVAL_DIR / "cases.json"))
     parser.add_argument("--out", default=str(EVAL_DIR / "results" / "latest.json"))
+    parser.add_argument("--gate", choices=["none", "unsafe", "all"], default="none",
+                        help="exit 1 on any unsafe autonomous action (unsafe) or on any case needing attention (all)")
     args = parser.parse_args(argv)
 
     logging.getLogger("claimpilot").setLevel(logging.WARNING)
@@ -215,6 +217,12 @@ def main(argv: list[str] | None = None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({**summary, "results": rows}, indent=2, default=str))
     print(f"\nMachine-readable results: {out}")
+    if args.gate != "none" and summary["unsafe_autonomous_actions"] > 0:
+        print("GATE FAILED: unsafe autonomous actions > 0", file=sys.stderr)
+        return 1
+    if args.gate == "all" and summary["cases_needing_attention"]:
+        print(f"GATE FAILED: cases needing attention: {summary['cases_needing_attention']}", file=sys.stderr)
+        return 1
     return 0
 
 
