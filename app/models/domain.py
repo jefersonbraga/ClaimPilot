@@ -158,35 +158,50 @@ class ClaimDecision(BaseModel):
 
 
 class ExecutionRecord(BaseModel):
-    """Everything needed to replay how a decision was produced (without chain-of-thought)."""
+    """Decision replay: everything needed to understand how a decision was produced, in reading order —
+    outcome first, then why, then the evidence and facts behind it. No model chain-of-thought is stored."""
 
+    # --- identity & versions
     execution_id: str
     claim_id: str
     timestamp: datetime
+    workflow_version: str
+    prompt_version: str
     model: str
     llm_provider: str
-    prompt_version: str
-    workflow_version: str
-    claim: Claim
-    retrieved_policy_ids: list[str]
-    retrieved_policy_versions: dict[str, str]
-    policy_evidence: list[PolicyEvidence]
-    tools_executed: list[str]
-    tool_results: list[ToolResult]
-    deterministic_outcome: RuleOutcome
-    llm_recommendation: Recommendation | None
-    llm_error: str | None
-    confidence: float
-    risk_level: RiskLevel
-    risk_factors: list[str]
+
+    # --- outcome and why
     recommendation: Recommendation
-    reasoning_summary: str
     human_review_required: bool
     human_review_reason: list[str]
     missing_information: list[str]
+    risk_level: RiskLevel
+    risk_factors: list[str]
+    confidence: float
+    deterministic_outcome: RuleOutcome
+    llm_recommendation: Recommendation | None  # the model's own opinion, kept even when overruled
+    reasoning_summary: str  # concise operational summary, not chain-of-thought
+
+    # --- evidence
+    policy_evidence: list[PolicyEvidence]
+    evidence_grounded: bool = False  # >= 1 verified citation and no unverifiable ones
+    grounding_failures: list[str] = Field(default_factory=list)
+    retrieved_policy_ids: list[str]
+    retrieved_policy_versions: dict[str, str]
+    supplemental_policy_ids: list[str] = Field(default_factory=list)  # added by the findings-driven second pass
+    retrieval_queries: list[str] = Field(default_factory=list)
+
+    # --- deterministic facts
+    tools_executed: list[str]
+    tool_summary: list[str] = Field(default_factory=list)  # one line per tool: "tool: OUTCOME — detail"
+    tool_results: list[ToolResult]
+
+    # --- path, cost, input
     routing_trail: list[str]
     latency_ms: float
     llm_latency_ms: float
     input_tokens: int
     output_tokens: int
     estimated_cost: float
+    llm_error: str | None  # set when the model output was invalid or the call failed
+    claim: Claim

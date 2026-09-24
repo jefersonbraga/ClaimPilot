@@ -59,3 +59,69 @@ def test_model_may_be_more_conservative_than_rules(make_investigator, demo_claim
 
     assert d.recommendation == Recommendation.HUMAN_REVIEW
     assert any("more conservative" in r for r in d.human_review_reasons)
+
+
+def test_too_short_excerpt_is_not_accepted_as_evidence(make_investigator, demo_claim):
+    d = make_investigator(llm_says("DENY", citations=[{"policy_id": "POL-MRI-001", "excerpt": "prior authorization"}])
+                          ).investigate(demo_claim("02_authorization_missing"))
+
+    assert d.recommendation == Recommendation.HUMAN_REVIEW
+    assert any("too short to verify" in r for r in d.human_review_reasons)
+
+
+def test_schema_invalid_output_falls_back_to_human_review(make_investigator, demo_claim):
+    d = make_investigator(llm_says("APPROVE", confidence=1.7)).investigate(demo_claim("01_obvious_approval"))
+
+    assert d.recommendation == Recommendation.HUMAN_REVIEW
+    assert any("schema validation" in r for r in d.human_review_reasons)
+
+
+def test_llm_outage_falls_back_to_human_review(make_investigator, demo_claim):
+    class DownLLM:
+        provider, model = "down", "down"
+
+        def complete(self, system, user):
+            raise TimeoutError("gateway timeout")
+
+    d = make_investigator(DownLLM()).investigate(demo_claim("01_obvious_approval"))
+
+    assert d.recommendation == Recommendation.HUMAN_REVIEW
+    assert any("TimeoutError" in r for r in d.human_review_reasons)
+
+
+def test_llm_cannot_decide_when_rules_are_indeterminate(make_investigator, demo_claim):
+    d = make_investigator(llm_says("APPROVE")).investigate(demo_claim("04_ambiguous_emergency_unknown"))
+
+    assert d.recommendation == Recommendation.HUMAN_REVIEW
+    assert any("INDETERMINATE" in r for r in d.human_review_reasons)
+
+
+# ---------------------------------------------------------------- exhaustive routing property
+
+
+def test_safety_matrix_no_combination_lets_the_model_override_rules():
+    """Every combination of rule verdict x model recommendation x confidence x grounding x risk.
+    An autonomous decision is only possible when every control agrees; otherwise there is a stated reason."""
+    import itertools
+
+    from app.models.domain import Citation, LLMAnalysis, RetrievedPolicy, RuleOutcome, ToolResult
+    from app.workflows import guardrails
+
+    policy = RetrievedPolicy(policy_id="POL-MRI-001", version="2.0", title="t", score=1.0, content=MRI_V2_EXCERPT)
+    good = [Citation(policy_id="POL-MRI-001", excerpt=MRI_V2_EXCERPT)]
+    bad = [Citation(policy_id="POL-MRI-001", excerpt="MRI never requires any prior authorization at all.")]
+
+    for rules, rec, conf, cites, high_value, missing in itertools.product(
+        RuleOutcome, Recommendation, (0.5, 0.95), (good, bad, []), (False, True), ([], ["diagnosis_code"])
+    ):
+        tools = [ToolResult(tool="calculate_financial_threshold", outcome=RuleOutcome.PASS, detail="",
+                            data={"high_value": high_value})]
+        analysis = LLMAnalysis(recommendation=rec, confidence=conf, reasoning_summary="x", citations=cites)
+        risk = guardrails.evaluate(rule_outcome=rules, tool_results=tools, missing_fields=missing, analysis=analysis,
+                                   llm_error=None, retrieved=[policy], confidence_threshold=0.8)
+
+        autonomous = not risk.review_reasons
+        if autonomous:
+            assert rules != RuleOutcome.INDETERMINATE
+            assert rec == guardrails.EXPECTED_FROM_RULES[rules]
+            assert conf >= 0.8 and cites is good and not high_value and not missing

@@ -1,10 +1,13 @@
 """The claim investigation workflow as a small LangGraph state machine.
 
-validate_claim ─┬─> retrieve_policy -> check_eligibility -> check_authorization -> analyze_claim -> evaluate_risk ─┐
-                └─(identity fields missing)────────────────────────────────────────────────────────> escalate_to_human
-                                                                                   human_review_router ├─> generate_recommendation ─┐
-                                                                                                       └─> escalate_to_human ───────┴─> record_audit
+validate_claim ─┬─> retrieve_policy -> check_eligibility -> check_authorization -> refine_retrieval
+                └─(identity fields missing)──────────────────────────────────────────────> escalate_to_human
+refine_retrieval -> analyze_claim -> evaluate_risk -> human_review_router ─┬─> generate_recommendation ─┐
+                                                                          └─> escalate_to_human ───────┴─> record_audit
+
 Deterministic nodes decide facts. The LLM node interprets. The router decides who gets the final say.
+Retrieval runs twice when needed: first from the claim itself, then (refine_retrieval) from what the deterministic
+tools discovered — e.g. a duplicate found in claims history pulls in the duplicate-claims policy.
 """
 
 import operator
@@ -47,6 +50,8 @@ class ClaimState(TypedDict, total=False):
     region: str | None
     applicable_policy_refs: list[str]
     retrieved: list[RetrievedPolicy]
+    retrieval_queries: Annotated[list[str], operator.add]
+    supplemental_policy_ids: list[str]
     tool_results: Annotated[list[ToolResult], operator.add]
     effective_outcomes: Annotated[list[RuleOutcome], operator.add]
     rule_outcome: RuleOutcome
@@ -76,11 +81,13 @@ def build_graph(*, llm: LLMClient, policy_store: PolicyStore, audit: AuditStore,
         member = claim_tools.find_member(claim.member_id)
         region = claim.region or (member or {}).get("region")
         applicable = policy_store.applicable_policies(claim, region)
-        retrieved = policy_store.retrieve(build_query(claim), claim, top_k=settings.retrieval_top_k, region=region)
+        query = build_query(claim)
+        retrieved = policy_store.retrieve(query, claim, top_k=settings.retrieval_top_k, region=region)
         return {
             "region": region,
             "applicable_policy_refs": [p.ref for p in applicable],
             "retrieved": retrieved,
+            "retrieval_queries": [query],
             "routing_trail": [f"retrieve_policy: {[f'{p.policy_id}@{p.version}' for p in retrieved]}"],
         }
 
@@ -117,6 +124,21 @@ def build_graph(*, llm: LLMClient, policy_store: PolicyStore, audit: AuditStore,
         rule_outcome = guardrails.aggregate_rule_outcome(state.get("effective_outcomes", []) + effective)
         return {"tool_results": results, "effective_outcomes": effective, "rule_outcome": rule_outcome,
                 "routing_trail": [f"check_authorization: {[f'{r.tool}={r.outcome.value}' for r in results]} -> rules={rule_outcome.value}"]}
+
+    def refine_retrieval(state: ClaimState) -> dict:
+        """Second, conditional retrieval pass driven by deterministic findings (failed/indeterminate checks and
+        risk signals). The first pass only knows the claim; this one knows what the tools discovered."""
+        found = guardrails.findings(state["tool_results"])
+        if not found:
+            return {"supplemental_policy_ids": [], "routing_trail": ["refine_retrieval: skipped (no deterministic findings)"]}
+        query = " ".join(t.detail for t in found)
+        have = {(p.policy_id, p.version) for p in state["retrieved"]}
+        extra = [p for p in policy_store.retrieve(query, state["claim"], top_k=settings.supplemental_top_k,
+                                                  region=state.get("region"), min_score=settings.supplemental_min_score)
+                 if (p.policy_id, p.version) not in have]
+        return {"retrieved": state["retrieved"] + extra, "retrieval_queries": [query],
+                "supplemental_policy_ids": [p.policy_id for p in extra],
+                "routing_trail": [f"refine_retrieval: findings={[t.tool for t in found]} added={[f'{p.policy_id}@{p.version}' for p in extra]}"]}
 
     def analyze_claim(state: ClaimState) -> dict:
         prompt = build_user_prompt(state["claim"], state["retrieved"], state["tool_results"], state["rule_outcome"])
@@ -168,7 +190,7 @@ def build_graph(*, llm: LLMClient, policy_store: PolicyStore, audit: AuditStore,
     g = StateGraph(ClaimState)
     for name, fn in [("validate_claim", validate_claim), ("retrieve_policy", retrieve_policy),
                      ("check_eligibility", check_eligibility), ("check_authorization", check_authorization),
-                     ("analyze_claim", analyze_claim), ("evaluate_risk", evaluate_risk),
+                     ("refine_retrieval", refine_retrieval), ("analyze_claim", analyze_claim), ("evaluate_risk", evaluate_risk),
                      ("generate_recommendation", generate_recommendation), ("escalate_to_human", escalate_to_human),
                      ("record_audit", record_audit)]:
         g.add_node(name, fn)
@@ -177,7 +199,8 @@ def build_graph(*, llm: LLMClient, policy_store: PolicyStore, audit: AuditStore,
     g.add_conditional_edges("validate_claim", after_validation, ["retrieve_policy", "escalate_to_human"])
     g.add_edge("retrieve_policy", "check_eligibility")
     g.add_edge("check_eligibility", "check_authorization")
-    g.add_edge("check_authorization", "analyze_claim")
+    g.add_edge("check_authorization", "refine_retrieval")
+    g.add_edge("refine_retrieval", "analyze_claim")
     g.add_edge("analyze_claim", "evaluate_risk")
     g.add_conditional_edges("evaluate_risk", human_review_router, ["generate_recommendation", "escalate_to_human"])
     g.add_edge("generate_recommendation", "record_audit")
@@ -241,12 +264,17 @@ def _execution_record(state: ClaimState, llm: LLMClient) -> ExecutionRecord:
         claim=state["claim"],
         retrieved_policy_ids=[p.policy_id for p in retrieved],
         retrieved_policy_versions={p.policy_id: p.version for p in retrieved},
+        supplemental_policy_ids=state.get("supplemental_policy_ids", []),
+        retrieval_queries=state.get("retrieval_queries", []),
         policy_evidence=d.policy_evidence,
         tools_executed=[t.tool for t in d.tool_results],
+        tool_summary=[f"{t.tool}: {t.outcome.value} — {t.detail}" for t in d.tool_results],
         tool_results=d.tool_results,
         deterministic_outcome=d.deterministic_outcome,
         llm_recommendation=analysis.recommendation if analysis else None,
         llm_error=state.get("llm_error"),
+        evidence_grounded=risk.grounded if risk else False,
+        grounding_failures=risk.grounding_problems if risk else [],
         confidence=d.confidence,
         risk_level=d.risk_level,
         risk_factors=risk.risk_factors if risk else [],
@@ -273,5 +301,6 @@ class ClaimInvestigator:
 
     def investigate(self, claim: Claim) -> ClaimDecision:
         state = self.graph.invoke({"execution_id": f"EXE-{uuid.uuid4().hex[:12]}", "started_at": time.perf_counter(),
-                                   "claim": claim, "tool_results": [], "effective_outcomes": [], "routing_trail": []})
+                                   "claim": claim, "tool_results": [], "effective_outcomes": [],
+                                   "retrieval_queries": [], "routing_trail": []})
         return state["decision"]

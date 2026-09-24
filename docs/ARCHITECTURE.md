@@ -218,8 +218,13 @@ classDiagram
         +Claim claim
         +list~str~ retrieved_policy_ids
         +dict retrieved_policy_versions
+        +list~str~ supplemental_policy_ids
+        +list~str~ retrieval_queries
         +list~PolicyEvidence~ policy_evidence
+        +bool evidence_grounded
+        +list~str~ grounding_failures
         +list~str~ tools_executed
+        +list~str~ tool_summary
         +list~ToolResult~ tool_results
         +RuleOutcome deterministic_outcome
         +Recommendation? llm_recommendation
@@ -319,7 +324,7 @@ classDiagram
         -list _doc_vecs
         +effective_policies(on) list~Policy~
         +applicable_policies(claim, region) list~Policy~
-        +retrieve(query, claim, top_k, region) list~RetrievedPolicy~
+        +retrieve(query, claim, top_k, region, min_score) list~RetrievedPolicy~
         +get(policy_id, version) Policy?
     }
 
@@ -345,6 +350,7 @@ classDiagram
         +list~str~ review_reasons
         +list~PolicyEvidence~ evidence
         +bool grounded
+        +list~str~ grounding_problems
     }
 
     class Settings {
@@ -357,6 +363,8 @@ classDiagram
         +float price_output_per_1k
         +float confidence_threshold
         +int retrieval_top_k
+        +int supplemental_top_k
+        +float supplemental_min_score
         +str audit_db_path
         +resolved_provider() str
     }
@@ -374,6 +382,9 @@ classDiagram
     class guardrails {
         <<module>>
         +EXPECTED_FROM_RULES dict
+        +RISK_SIGNALS dict
+        +risk_factors(tool_results) list~str~
+        +findings(tool_results) list~ToolResult~
         +ground_citations(analysis, retrieved)
         +aggregate_rule_outcome(outcomes) RuleOutcome
         +evaluate(...) RiskAssessment
@@ -393,7 +404,7 @@ classDiagram
 
 ## 5. Workflow state machine (LangGraph)
 
-`app/workflows/claim_graph.py`. There are two decision points, and both are pure functions of the state:
+`app/workflows/claim_graph.py` (`WORKFLOW_VERSION = claim-investigation-wf/1.1.0`). There are two decision points, and both are pure functions of the state:
 - `after_validation` short-circuits to a human when the claim can't even be identified;
 - `human_review_router` sends the claim to a human if **any** guardrail produced a reason.
 
@@ -408,7 +419,8 @@ stateDiagram-v2
 
     retrieve_policy --> check_eligibility
     check_eligibility --> check_authorization
-    check_authorization --> analyze_claim
+    check_authorization --> refine_retrieval
+    refine_retrieval --> analyze_claim
     analyze_claim --> evaluate_risk
 
     evaluate_risk --> human_review_router
@@ -429,6 +441,11 @@ stateDiagram-v2
         produces the authoritative
         rule verdict PASS / FAIL / INDETERMINATE
     end note
+    note left of refine_retrieval
+        2nd retrieval pass, query built from
+        tool findings (non-PASS results and
+        risk signals); skipped when none
+    end note
     note right of analyze_claim
         the ONLY non-deterministic step
         (one LLM call, structured JSON)
@@ -447,9 +464,10 @@ Fields marked ⊕ use an additive reducer: each node *appends* to them, so the r
 ```mermaid
 flowchart LR
     s0["execution_id · started_at · claim"] --> s1["missing_fields"]
-    s1 --> s2["region · applicable_policy_refs · retrieved"]
+    s1 --> s2["region · applicable_policy_refs · retrieved · ⊕ retrieval_queries"]
     s2 --> s3["⊕ tool_results · ⊕ effective_outcomes · rule_outcome"]
-    s3 --> s4["analysis · llm_usage · llm_error"]
+    s3 --> s3b["retrieved (+ supplemental) · supplemental_policy_ids · ⊕ retrieval_queries"]
+    s3b --> s4["analysis · llm_usage · llm_error"]
     s4 --> s5["risk (RiskAssessment)"]
     s5 --> s6["decision (ClaimDecision)"]
     trail["⊕ routing_trail — appended by every node"] -.-> s6
@@ -493,6 +511,12 @@ sequenceDiagram
     end
     G->>T: calculate_financial_threshold
     G->>GR: aggregate_rule_outcome → PASS / FAIL / INDETERMINATE
+
+    G->>GR: findings(tool_results)
+    opt tools surfaced findings (non-PASS or risk signal)
+        G->>PS: retrieve(query from finding details, top_k=2, min_score=0.15)
+        PS-->>G: supplemental policies (appended if new)
+    end
 
     G->>LLM: complete(SYSTEM_PROMPT, claim + policies + tool results + verdict)
     LLM-->>G: raw JSON + token counts
@@ -560,7 +584,7 @@ flowchart TD
 
 ## 8. Guardrails & escalation decision (UML activity)
 
-`guardrails.evaluate()` doesn't stop at the first trigger. It collects **every** reason, so the analyst sees the full picture. Routing then comes down to one question: *is the list empty?*
+`guardrails.evaluate()` doesn't stop at the first trigger. It collects **every** reason, so the analyst sees the full picture. Routing then comes down to one question: *is the list empty?* A final safety invariant is defence in depth: even if a future change forgot to add a reason, a HIGH-risk, INDETERMINATE or ungrounded case can never become an autonomous decision. `tests/test_guardrails.py::test_safety_matrix_no_combination_lets_the_model_override_rules` checks every combination.
 
 ```mermaid
 flowchart TD
@@ -570,7 +594,7 @@ flowchart TD
     r1 -- no --> r2
     a1 --> r2
 
-    r2{Tool INDETERMINATE<br/>not explained by missing data?} -- yes --> a2["+ '… could not reach a deterministic result'"]
+    r2{Rule verdict INDETERMINATE?<br/>or tool INDETERMINATE not explained<br/>by missing data?} -- yes --> a2["+ 'Deterministic rule verdict is INDETERMINATE'<br/>+ '… could not reach a deterministic result'"]
     r2 -- no --> r3
     a2 --> r3
 
@@ -582,7 +606,7 @@ flowchart TD
     r4 -- yes --> r5
     a4 --> done
 
-    r5{Every citation retrieved<br/>AND verbatim in policy text?} -- no --> a5["+ 'Ungrounded citation (possible hallucination)'"]
+    r5{Every citation retrieved,<br/>≥ 5 words AND verbatim in policy text?} -- no --> a5["+ 'Ungrounded citation (possible hallucination)'"]
     r5 -- yes --> r6
     a5 --> r6
 
@@ -601,7 +625,9 @@ flowchart TD
     a9 --> done
 
     done{review_reasons empty?}
-    done -- yes --> ok(["generate_recommendation<br/>APPROVE / DENY from rules"])
+    done -- yes --> inv{"Safety invariant:<br/>HIGH risk, INDETERMINATE<br/>or not grounded?"}
+    inv -- yes --> ai["+ 'Safety invariant: autonomous decision blocked'"] --> hr
+    inv -- no --> ok(["generate_recommendation<br/>APPROVE / DENY from rules"])
     done -- no --> hr(["escalate_to_human<br/>HUMAN_REVIEW + all reasons"])
 
     style a9 fill:#fde2e2,stroke:#c0392b
@@ -640,6 +666,7 @@ sequenceDiagram
     T-->>CP: FAIL — PA required, none on file
     CP->>T: emergency exemption (POL-EMRG-002 v1.0)
     T-->>CP: INDETERMINATE — missing emergency_indicator
+    Note over CP: refine_retrieval: findings = PA FAIL + exemption INDETERMINATE<br/>(both policies already retrieved — nothing added)
     CP->>L: analyze (verdict = INDETERMINATE)
     L-->>CP: HUMAN_REVIEW, confidence 0.55, cites MRI-001 + EMRG-002
     CP->>AU: EXE-1 (HUMAN_REVIEW, reasons, evidence)
@@ -685,7 +712,7 @@ sequenceDiagram
     API-->>Auditor: 200 replay
 
     Note right of Auditor: What the replay contains
-    Note right of Auditor: • claim snapshot as received<br/>• model · prompt_version · workflow_version<br/>• retrieved_policy_ids + exact versions<br/>• every tool call and its result<br/>• rule verdict vs LLM recommendation<br/>• verified evidence + reasoning summary<br/>• routing_trail (path through the graph)<br/>• escalation reasons · latency · tokens · cost
+    Note right of Auditor: • outcome first: recommendation · review reasons · missing info · risk · confidence<br/>• model · prompt_version · workflow_version<br/>• rule verdict vs LLM recommendation<br/>• verified evidence · grounding failures<br/>• retrieved policies + exact versions · which came from the 2nd pass · queries used<br/>• tool_summary (one line per tool) + full tool results<br/>• routing_trail · latency · tokens · cost · claim snapshot
 ```
 
 ---
@@ -814,7 +841,7 @@ flowchart LR
 
 ## 14. Evaluation pipeline
 
-`python -m evals.run` runs each case through the **same** workflow the API uses, then reads the audit record back. Metrics are computed from what the system actually recorded, not from what the harness thinks it sent.
+`python -m evals.run` runs each case through the **same** workflow the API uses, then reads the audit record back. Metrics are computed from what the system actually recorded, not from what the harness thinks it sent. `--provider openai` runs the identical pipeline against a real model and refuses to run without `LLM_API_KEY`.
 
 ```mermaid
 flowchart LR
@@ -829,7 +856,8 @@ flowchart LR
     cmp --> m3["grounded response rate"]
     cmp --> m4["correct escalation rate"]
     cmp --> m5["unsafe autonomous actions<br/>(release gate: must be 0)"]
-    cmp --> m6["avg latency · tokens · cost"]
+    cmp --> m6["invalid structured outputs"]
+    cmp --> m7["latency avg · p50 · p95<br/>tokens in/out · cost per claim"]
 
-    m1 & m2 & m3 & m4 & m5 & m6 --> out["console report<br/>+ evals/results/latest.json"]
+    m1 & m2 & m3 & m4 & m5 & m6 & m7 --> out["console report + per-case diagnostics<br/>+ evals/results/latest.json"]
 ```

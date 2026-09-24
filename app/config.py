@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 
-WORKFLOW_VERSION = "claim-investigation-wf/1.0.0"
+WORKFLOW_VERSION = "claim-investigation-wf/1.1.0"  # 1.1.0: findings-driven supplemental retrieval
 
 
 def _float(name: str, default: float) -> float:
@@ -29,6 +29,9 @@ class Settings:
     # Human-in-the-loop thresholds
     confidence_threshold: float = field(default_factory=lambda: _float("CONFIDENCE_THRESHOLD", 0.80))
     retrieval_top_k: int = field(default_factory=lambda: int(os.getenv("RETRIEVAL_TOP_K", "4")))
+    # Second-pass retrieval driven by tool findings: small k and a relevance floor keep it from adding noise.
+    supplemental_top_k: int = field(default_factory=lambda: int(os.getenv("SUPPLEMENTAL_RETRIEVAL_TOP_K", "2")))
+    supplemental_min_score: float = field(default_factory=lambda: _float("SUPPLEMENTAL_RETRIEVAL_MIN_SCORE", 0.15))
 
     # Storage
     audit_db_path: str = field(default_factory=lambda: os.getenv("AUDIT_DB_PATH", str(ROOT_DIR / "claimpilot.db")))

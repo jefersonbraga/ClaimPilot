@@ -1,6 +1,8 @@
+.git
 .venv
 __pycache__
 .pytest_cache
 *.db
 .env
 evals/results
+.DS_Store

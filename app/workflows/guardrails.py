@@ -23,9 +23,32 @@ EXPECTED_FROM_RULES = {
     RuleOutcome.INDETERMINATE: Recommendation.HUMAN_REVIEW,
 }
 
+# A citation must quote enough text to actually support something; "prior authorization" alone is not evidence.
+MIN_EXCERPT_WORDS = 5
+
+# Deterministic risk signals: (tool, data flag) -> description. A signal never fails a rule; it forces review.
+RISK_SIGNALS = {
+    ("calculate_financial_threshold", "high_value"): lambda v: "High-value claim (above financial review threshold).",
+    ("get_claim_history", "possible_duplicate_of"): lambda v: f"Possible duplicate of {', '.join(v)}.",
+    ("check_prior_authorization", "policy_conflict"): lambda v: "Conflicting policy evidence on prior authorization requirement.",
+}
+
 
 def _norm(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip().lower()
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return text.strip(" \"'“”‘’").removesuffix("...").removesuffix("…").rstrip(" .")
+
+
+def risk_factors(tool_results: list[ToolResult]) -> list[str]:
+    return [describe(t.data[flag]) for t in tool_results for (tool, flag), describe in RISK_SIGNALS.items()
+            if t.tool == tool and t.data.get(flag)]
+
+
+def findings(tool_results: list[ToolResult]) -> list[ToolResult]:
+    """Tool results that surfaced something an analyst would need to read policy about:
+    a non-PASS outcome or a deterministic risk signal."""
+    return [t for t in tool_results
+            if t.outcome != RuleOutcome.PASS or any(t.tool == tool and t.data.get(flag) for tool, flag in RISK_SIGNALS)]
 
 
 def ground_citations(analysis: LLMAnalysis, retrieved: list[RetrievedPolicy]) -> tuple[list[PolicyEvidence], list[str]]:
@@ -36,7 +59,9 @@ def ground_citations(analysis: LLMAnalysis, retrieved: list[RetrievedPolicy]) ->
         policy = by_id.get(c.policy_id)
         if policy is None:
             problems.append(f"cited {c.policy_id}, which was not in the retrieved evidence")
-        elif not c.excerpt.strip() or _norm(c.excerpt) not in _norm(policy.content):
+        elif len(_norm(c.excerpt).split()) < MIN_EXCERPT_WORDS:
+            problems.append(f"excerpt attributed to {c.policy_id} is too short to verify (< {MIN_EXCERPT_WORDS} words)")
+        elif _norm(c.excerpt) not in _norm(policy.content):
             problems.append(f"excerpt attributed to {c.policy_id} does not appear in the policy text")
         else:
             grounded.append(PolicyEvidence(policy_id=policy.policy_id, version=policy.version, excerpt=c.excerpt.strip()))
@@ -58,6 +83,7 @@ class RiskAssessment:
     review_reasons: list[str] = field(default_factory=list)
     evidence: list[PolicyEvidence] = field(default_factory=list)
     grounded: bool = False
+    grounding_problems: list[str] = field(default_factory=list)
 
 
 def evaluate(
@@ -71,16 +97,7 @@ def evaluate(
     confidence_threshold: float,
 ) -> RiskAssessment:
     reasons: list[str] = []
-    risk_factors: list[str] = []
-    data = {t.tool: t.data for t in tool_results}
-
-    # --- risk signals from deterministic tools
-    if data.get("calculate_financial_threshold", {}).get("high_value"):
-        risk_factors.append("High-value claim (above financial review threshold).")
-    if data.get("get_claim_history", {}).get("possible_duplicate_of"):
-        risk_factors.append(f"Possible duplicate of {', '.join(data['get_claim_history']['possible_duplicate_of'])}.")
-    if data.get("check_prior_authorization", {}).get("policy_conflict"):
-        risk_factors.append("Conflicting policy evidence on prior authorization requirement.")
+    factors = risk_factors(tool_results)
 
     # --- missing information (claim fields + anything tools or the LLM flagged)
     missing = list(dict.fromkeys(
@@ -92,14 +109,17 @@ def evaluate(
         reasons.append(f"Required information is missing: {', '.join(missing)}.")
 
     # --- deterministic rules
+    if rule_outcome == RuleOutcome.INDETERMINATE:
+        reasons.append("Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim.")
     for t in tool_results:
         if t.outcome == RuleOutcome.INDETERMINATE and not t.data.get("missing"):
             reasons.append(f"{t.tool} could not reach a deterministic result: {t.detail}")
-    for f in risk_factors:
+    for f in factors:
         reasons.append(f"HIGH risk: {f}")
 
     # --- LLM output guardrails
     evidence: list[PolicyEvidence] = []
+    problems: list[str] = []
     grounded = False
     if llm_error or analysis is None:
         reasons.append(f"LLM analysis unavailable or invalid; falling back to human review ({llm_error or 'no output'}).")
@@ -122,11 +142,17 @@ def evaluate(
                 f"{rule_outcome.value}; the model cannot override business rules."
             )
 
-    if risk_factors:
+    if factors:
         level = RiskLevel.HIGH
     elif reasons or rule_outcome != RuleOutcome.PASS:
         level = RiskLevel.MEDIUM
     else:
         level = RiskLevel.LOW
-    return RiskAssessment(risk_level=level, risk_factors=risk_factors, review_reasons=list(dict.fromkeys(reasons)),
-                          evidence=evidence, grounded=grounded)
+
+    # Safety invariant (defence in depth): these states must never be decided autonomously, even if a future
+    # change to the checks above forgets to add a reason.
+    if not reasons and (level == RiskLevel.HIGH or rule_outcome == RuleOutcome.INDETERMINATE or not grounded):
+        reasons.append("Safety invariant: autonomous decision blocked (high risk, indeterminate rules or ungrounded output).")
+
+    return RiskAssessment(risk_level=level, risk_factors=factors, review_reasons=list(dict.fromkeys(reasons)),
+                          evidence=evidence, grounded=grounded, grounding_problems=problems)

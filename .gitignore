@@ -1,6 +1,22 @@
-.venv/
-__pycache__/
-.pytest_cache/
-*.db
+# Environments & secrets
 .env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated evaluation output (regenerate with: python -m evals.run)
 evals/results/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

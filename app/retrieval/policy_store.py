@@ -79,7 +79,8 @@ class PolicyStore:
         norm = math.sqrt(sum(v * v for v in vec.values())) or 1.0
         return {t: v / norm for t, v in vec.items()}
 
-    def retrieve(self, query: str, claim: Claim, top_k: int = 4, region: str | None = None) -> list[RetrievedPolicy]:
+    def retrieve(self, query: str, claim: Claim, top_k: int = 4, region: str | None = None,
+                 min_score: float = 0.0) -> list[RetrievedPolicy]:
         """Rank policies in scope for the claim by similarity to the investigation query."""
         candidates = {id(p) for p in self.applicable_policies(claim, region)}
         q = self._vector(Counter(_tokens(query)))
@@ -88,7 +89,7 @@ class PolicyStore:
             if id(p) not in candidates:
                 continue
             score = sum(w * dvec.get(t, 0.0) for t, w in q.items())
-            if score > 0:
+            if score > min_score:
                 scored.append((score, p))
         scored.sort(key=lambda s: s[0], reverse=True)
         return [

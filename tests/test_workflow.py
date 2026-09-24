@@ -91,3 +91,38 @@ def test_every_execution_is_audited_with_versions(make_investigator, demo_claim,
     assert "check_prior_authorization" in record.tools_executed
     assert record.human_review_reason == d.human_review_reasons
     assert record.routing_trail[-1].startswith("escalate_to_human")
+
+
+# ---------------------------------------------------------------- findings-driven retrieval (regression)
+
+
+def test_duplicate_found_by_history_tool_pulls_duplicate_policy_into_evidence(make_investigator, demo_claim, audit):
+    """Regression: retrieval used to run only before the tools, so a duplicate discovered in claims history
+    never brought POL-DUP-006 into the evidence the model and the analyst see."""
+    claim = demo_claim("02_authorization_missing", claim_id="T-DUP", member_id="MBR-10045",
+                       prior_authorization=True, date_of_service="2026-07-01")
+    d = make_investigator().investigate(claim)
+    record = audit.get(d.execution_id)
+
+    assert d.recommendation == Recommendation.HUMAN_REVIEW
+    assert "POL-DUP-006" in record.retrieved_policy_ids
+    assert "POL-DUP-006" in record.supplemental_policy_ids  # came from the second, findings-driven pass
+    assert len(record.retrieval_queries) == 2
+
+
+def test_findings_driven_retrieval_generalizes_to_other_procedures(make_investigator, demo_claim, audit):
+    """Same mechanism, different claim type: a lab claim duplicating a paid lab claim 18 days earlier."""
+    claim = demo_claim("01_obvious_approval", claim_id="T-LAB-DUP", procedure="LAB_CBC", date_of_service="2026-02-20")
+    d = make_investigator().investigate(claim)
+    record = audit.get(d.execution_id)
+
+    assert d.recommendation == Recommendation.HUMAN_REVIEW
+    assert "POL-DUP-006" in record.supplemental_policy_ids
+
+
+def test_second_retrieval_pass_is_skipped_when_tools_find_nothing(make_investigator, demo_claim, audit):
+    d = make_investigator().investigate(demo_claim("01_obvious_approval"))
+    record = audit.get(d.execution_id)
+
+    assert record.supplemental_policy_ids == []
+    assert any(step.startswith("refine_retrieval: skipped") for step in record.routing_trail)
