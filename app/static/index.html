@@ -20,6 +20,7 @@
       <nav class="topnav" aria-label="Page">
         <a href="#workbench">Workbench</a>
         <a href="#how">How it works</a>
+        <a href="#history">History</a>
         <a href="#evaluation">Evaluation</a>
         <a href="/docs" target="_blank" rel="noopener">API docs ↗</a>
       </nav>
@@ -289,6 +290,23 @@
     </section>
 
     <!-- 9. Evaluation -->
+    <section id="history" class="section section-tight" aria-labelledby="history-title">
+      <div class="wrap">
+        <div class="section-head">
+          <h2 id="history-title">Your execution history</h2>
+          <p>Only analyses made from this browser (anonymous cookie, no login). Open a run to replay it, or copy a link to share one decision.</p>
+        </div>
+        <div class="card history-card">
+          <div class="history-toolbar">
+            <label for="history-filter">Claim</label>
+            <select id="history-filter"><option value="">All claims</option></select>
+            <button type="button" class="link-btn" id="history-refresh">Refresh</button>
+          </div>
+          <div id="history-list" aria-live="polite"><p class="muted">Loading…</p></div>
+        </div>
+      </div>
+    </section>
+
     <section id="evaluation" class="section">
       <div class="wrap">
         <div class="section-head">

@@ -37,14 +37,19 @@ class AuditStore:
                    timestamp    TEXT NOT NULL,
                    record       TEXT NOT NULL)"""
         )
+        # `visitor` scopes history in the public demo: a hash of an anonymous browser cookie, never the cookie itself.
+        # Production would scope by authenticated user + role (RBAC) instead.
+        if "visitor" not in {row[1] for row in self._conn.execute("PRAGMA table_info(executions)")}:
+            self._conn.execute("ALTER TABLE executions ADD COLUMN visitor TEXT")
         self._conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_claim ON executions(claim_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_exec_visitor ON executions(visitor, timestamp)")
         self._conn.commit()
 
-    def save(self, record: ExecutionRecord) -> None:
+    def save(self, record: ExecutionRecord, visitor: str | None = None) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO executions VALUES (?, ?, ?, ?)",
-                (record.execution_id, record.claim_id, record.timestamp.isoformat(), record.model_dump_json()),
+                "INSERT INTO executions (execution_id, claim_id, timestamp, record, visitor) VALUES (?, ?, ?, ?, ?)",
+                (record.execution_id, record.claim_id, record.timestamp.isoformat(), record.model_dump_json(), visitor),
             )
             self._conn.commit()
 
@@ -52,10 +57,20 @@ class AuditStore:
         row = self._conn.execute("SELECT record FROM executions WHERE execution_id = ?", (execution_id,)).fetchone()
         return ExecutionRecord.model_validate_json(row[0]) if row else None
 
-    def for_claim(self, claim_id: str) -> list[ExecutionRecord]:
-        rows = self._conn.execute(
-            "SELECT record FROM executions WHERE claim_id = ? ORDER BY timestamp", (claim_id,)
-        ).fetchall()
+    def for_claim(self, claim_id: str, visitor: str | None = None) -> list[ExecutionRecord]:
+        """All executions of a claim; limited to one visitor's executions when `visitor` is given."""
+        sql, args = "SELECT record FROM executions WHERE claim_id = ?", [claim_id]
+        if visitor is not None:
+            sql, args = sql + " AND visitor = ?", args + [visitor]
+        rows = self._conn.execute(sql + " ORDER BY timestamp", args).fetchall()
+        return [ExecutionRecord.model_validate_json(r[0]) for r in rows]
+
+    def recent(self, visitor: str, limit: int = 20, claim_id: str | None = None) -> list[ExecutionRecord]:
+        """A visitor's most recent executions, newest first."""
+        sql, args = "SELECT record FROM executions WHERE visitor = ?", [visitor]
+        if claim_id:
+            sql, args = sql + " AND claim_id = ?", args + [claim_id]
+        rows = self._conn.execute(sql + " ORDER BY timestamp DESC LIMIT ?", args + [limit]).fetchall()
         return [ExecutionRecord.model_validate_json(r[0]) for r in rows]
 
     def all(self) -> list[ExecutionRecord]:

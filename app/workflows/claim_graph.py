@@ -61,6 +61,7 @@ class ClaimState(TypedDict, total=False):
     risk: guardrails.RiskAssessment
     decision: ClaimDecision
     routing_trail: Annotated[list[str], operator.add]
+    visitor: str | None  # opaque history scope (hashed); stored with the audit record, not part of the replay
 
 
 def build_graph(*, llm: LLMClient, policy_store: PolicyStore, audit: AuditStore, settings: Settings):
@@ -176,7 +177,7 @@ def build_graph(*, llm: LLMClient, policy_store: PolicyStore, audit: AuditStore,
 
     def record_audit(state: ClaimState) -> dict:
         record = _execution_record(state, llm)
-        audit.save(record)
+        audit.save(record, visitor=state.get("visitor"))
         log_event("claim_investigated", execution_id=record.execution_id, claim_id=record.claim_id,
                   recommendation=record.recommendation.value, human_review=record.human_review_required,
                   risk=record.risk_level.value, rule_outcome=record.deterministic_outcome.value,
@@ -300,18 +301,19 @@ class ClaimInvestigator:
         self.graph = build_graph(llm=llm, policy_store=policy_store, audit=audit, settings=settings)
 
     @staticmethod
-    def _initial_state(claim: Claim) -> dict:
+    def _initial_state(claim: Claim, visitor: str | None = None) -> dict:
         return {"execution_id": f"EXE-{uuid.uuid4().hex[:12]}", "started_at": time.perf_counter(), "claim": claim,
-                "tool_results": [], "effective_outcomes": [], "retrieval_queries": [], "routing_trail": []}
+                "tool_results": [], "effective_outcomes": [], "retrieval_queries": [], "routing_trail": [],
+                "visitor": visitor}
 
-    def investigate(self, claim: Claim) -> ClaimDecision:
-        return self.graph.invoke(self._initial_state(claim))["decision"]
+    def investigate(self, claim: Claim, visitor: str | None = None) -> ClaimDecision:
+        return self.graph.invoke(self._initial_state(claim, visitor))["decision"]
 
-    def investigate_stream(self, claim: Claim):
+    def investigate_stream(self, claim: Claim, visitor: str | None = None):
         """Same run as `investigate`, but yields ("node", {node, trail}) as each LangGraph node completes and
         finally ("decision", ClaimDecision). Lets a UI show real progress instead of a simulated animation."""
         decision = None
-        for update in self.graph.stream(self._initial_state(claim), stream_mode="updates"):
+        for update in self.graph.stream(self._initial_state(claim, visitor), stream_mode="updates"):
             for node, delta in update.items():
                 delta = delta or {}
                 trail = delta.get("routing_trail") or []

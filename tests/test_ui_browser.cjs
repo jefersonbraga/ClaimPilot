@@ -203,3 +203,27 @@ test('Live progress follows the streamed workflow events while an analysis runs'
   assert.equal(await p.locator('#flow .live-running, #flow .live-pending').count(), 0);
   assert.match(await status(p, 'review'), /Executed/);
 });
+
+test('Execution history is per browser, reopenable, and shareable by link', async t => {
+  const p = await page(t);
+  await p.locator('.scenario[data-id="ambiguous-emergency"]').click();
+  await analyze(p);
+  await p.locator('.scenario[data-id="emergency-confirmed"]').click();
+  await analyze(p);
+  await p.waitForFunction(() => document.querySelectorAll('#history-list tbody tr').length === 2);
+  assert.match(p.url(), /\?execution=EXE-/);
+
+  // Reopen the older run: the workbench and diagram show that recorded decision again.
+  const older = await p.locator('#history-list tbody tr:last-child [data-open]').getAttribute('data-open');
+  await p.locator('#history-list tbody tr:last-child [data-open]').click();
+  await p.waitForFunction(id => location.search.includes(id), older);
+  assert.match(await p.locator('#verdict').textContent(), /Human review/);
+  assert.match(await status(p, 'review'), /Executed/);
+
+  // Another browser (fresh context = fresh cookie) can open the shared link but has no history of its own.
+  const other = await page(t);
+  await other.goto(`${base}/?execution=${older}`);
+  await other.waitForFunction(() => !document.querySelector('#results').hidden);
+  assert.match(await other.locator('#verdict').textContent(), /Human review/);
+  await other.waitForSelector('#history-list .history-empty');
+});

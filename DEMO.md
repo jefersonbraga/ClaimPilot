@@ -19,11 +19,18 @@ docker compose up --build
 
 Everything below assumes `http://localhost:8000`. Only `curl` and `python3` are needed; `python3 -m json.tool` does the pretty-printing, so `jq` isn't required.
 
+History is private to each visitor (an anonymous cookie), so the curl examples share one cookie jar:
+
+```bash
+C="curl -s -c /tmp/cp.jar -b /tmp/cp.jar"
+```
+
 **Visual version:** open **http://localhost:8000**. The *Ambiguous Emergency* scenario is preselected.
 1. Click **Analyze Claim**. The workflow diagram lights up step by step as the backend runs each node. With a real model, *Interpret with AI* pulses during the model call. The page then scrolls to the result: HUMAN_REVIEW, with the checks that drove it, the missing `emergency_indicator` and the verified evidence.
 2. Click **View Full Decision Replay** to see the stored execution record.
-3. Pick **Emergency Confirmed** and analyze again. A banner shows `HUMAN_REVIEW → APPROVE` and the one field that changed.
-4. Scroll down to the evaluation snapshot.
+3. Pick **Emergency Confirmed** and analyze again. A banner shows `HUMAN_REVIEW → APPROVE` and the fields that changed.
+4. Scroll to **Your execution history**: both runs are listed. **Open** reloads any past decision into the workbench and diagram, and **Copy link** gives a URL (`/?execution=EXE-…`) that opens that exact decision in any browser.
+5. Scroll down to the evaluation snapshot.
 
 The steps below are the same story with curl, for a terminal-only demo. To run it in one go: `./scripts/demo.sh` (set `NO_PAUSE=1` to skip the pauses).
 
@@ -48,7 +55,7 @@ cat data/claims/04_ambiguous_emergency_unknown.json
 ## 3. ClaimPilot investigates and refuses to guess (~40s)
 
 ```bash
-curl -s -X POST localhost:8000/claims/analyze \
+$C -X POST localhost:8000/claims/analyze \
   -H 'Content-Type: application/json' \
   -d @data/claims/04_ambiguous_emergency_unknown.json | tee /tmp/first.json | python3 -m json.tool
 ```
@@ -78,7 +85,7 @@ curl -s localhost:8000/executions/$EXEC_ID | python3 -m json.tool
 The analyst confirms with the provider that this was an emergency, and that the retrospective authorization was requested within 72h (a condition of POL-EMRG-002):
 
 ```bash
-curl -s -X POST localhost:8000/claims/analyze \
+$C -X POST localhost:8000/claims/analyze \
   -H 'Content-Type: application/json' \
   -d @data/claims/04b_ambiguous_emergency_confirmed.json | python3 -m json.tool
 ```
@@ -89,16 +96,16 @@ Optional counter-example: the emergency is *not* confirmed.
 
 ```bash
 sed 's/"emergency_indicator": true/"emergency_indicator": false/' data/claims/04b_ambiguous_emergency_confirmed.json \
-  | curl -s -X POST localhost:8000/claims/analyze -H 'Content-Type: application/json' -d @- \
+  | $C -X POST localhost:8000/claims/analyze -H 'Content-Type: application/json' -d @- \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["recommendation"], "-", d["reasoning_summary"])'
 ```
 
 → **DENY**: prior authorization is required and no exemption applies.
 
-## 6. Full audit trail for the claim (~10s)
+## 6. Your audit trail for the claim (~10s)
 
 ```bash
-curl -s localhost:8000/claims/CLM-92811/audit \
+$C localhost:8000/claims/CLM-92811/audit \
   | python3 -c 'import json,sys; [print(r["execution_id"], r["claim"]["emergency_indicator"], "->", r["recommendation"]) for r in json.load(sys.stdin)]'
 ```
 

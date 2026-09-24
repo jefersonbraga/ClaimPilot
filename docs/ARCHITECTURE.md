@@ -821,6 +821,7 @@ erDiagram
         string claim_id "indexed"
         string timestamp
         json record "full ExecutionRecord"
+        string visitor "hash of anonymous cookie (history scope)"
     }
 
     MEMBER ||--o{ PRIOR_AUTH : "holds"

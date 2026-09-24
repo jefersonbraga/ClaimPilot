@@ -254,6 +254,8 @@ async function analyze() {
     state.last = run;
     state.replay = null;
     render(decision, null, previous);
+    markCurrentExecution(decision.execution_id);
+    loadHistory();
     if (followed) window.setTimeout(() => $("#results").scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" }), 450);
     setReplayNotice("Loading the recorded execution…", true);
     try {
@@ -697,6 +699,105 @@ function switchReplayView(view) {
   $("#replay-raw").hidden = view !== "raw";
 }
 
+// ------------------------------------------------------------------ execution history (this browser only)
+
+const history_ = { rows: [], currentId: null };
+const recTag = (rec) => `<span class="tag ${rec === "APPROVE" ? "PASS" : rec === "DENY" ? "FAIL" : "INDETERMINATE"}">${esc(rec)}</span>`;
+
+async function loadHistory() {
+  const filter = $("#history-filter").value;
+  let rows;
+  try {
+    rows = await api(`/executions?limit=50${filter ? `&claim_id=${encodeURIComponent(filter)}` : ""}`);
+  } catch (e) {
+    $("#history-list").innerHTML = `<p class="history-empty">History is unavailable (${esc(e.message)}).</p>`;
+    return;
+  }
+  if (!filter) {
+    history_.rows = rows;
+    const claims = [...new Set(rows.map((r) => r.claim_id))];
+    $("#history-filter").innerHTML = `<option value="">All claims</option>` + claims.map((c) => `<option>${esc(c)}</option>`).join("");
+  }
+  if (!rows.length) {
+    $("#history-list").innerHTML = `<p class="history-empty">No analyses from this browser yet. Run one above; every execution is recorded and replayable.</p>`;
+    return;
+  }
+  $("#history-list").innerHTML = `<div class="history-wrap"><table class="history-table">
+    <thead><tr><th>When</th><th>Claim</th><th>Recommendation</th><th>Risk</th><th>Rules</th><th>Model</th><th>Latency</th><th>Cost</th><th></th></tr></thead>
+    <tbody>${rows.map((r) => `<tr class="${r.execution_id === history_.currentId ? "current" : ""}">
+      <td class="num" title="${esc(r.timestamp)}">${esc(new Date(r.timestamp).toLocaleString())}</td>
+      <td><code>${esc(r.claim_id)}</code></td>
+      <td>${recTag(r.recommendation)}</td>
+      <td><span class="tag ${esc(r.risk_level)}">${esc(r.risk_level)}</span></td>
+      <td><span class="tag ${esc(r.deterministic_outcome)}">${esc(r.deterministic_outcome)}</span></td>
+      <td class="num">${esc(r.model)}</td>
+      <td class="num">${r.latency_ms >= 1000 ? (r.latency_ms / 1000).toFixed(1) + " s" : Math.round(r.latency_ms) + " ms"}</td>
+      <td class="num">${r.llm_provider === "mock" ? "—" : "$" + Number(r.estimated_cost).toFixed(5)}</td>
+      <td><div class="row-actions">
+        <button type="button" class="link-btn" data-open="${esc(r.execution_id)}">Open</button>
+        <button type="button" class="link-btn" data-copy="${esc(r.execution_id)}">Copy link</button>
+      </div></td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function executionLink(id) { return `${location.origin}/?execution=${encodeURIComponent(id)}`; }
+function markCurrentExecution(id) {
+  history_.currentId = id;
+  try { window.history.replaceState(null, "", `?execution=${encodeURIComponent(id)}`); } catch { /* file:// or sandbox */ }
+}
+
+// Rebuild the workbench from a stored execution record (the replay carries everything the decision view needs).
+function decisionFromRecord(r) {
+  return {
+    execution_id: r.execution_id, claim_id: r.claim_id, recommendation: r.recommendation, confidence: r.confidence,
+    risk_level: r.risk_level, reasoning_summary: r.reasoning_summary, policy_evidence: r.policy_evidence,
+    tool_results: r.tool_results, deterministic_outcome: r.deterministic_outcome,
+    human_review_required: r.human_review_required, human_review_reasons: r.human_review_reason,
+    missing_information: r.missing_information, estimated_tokens: r.input_tokens + r.output_tokens,
+    estimated_cost: r.estimated_cost, latency_ms: r.latency_ms,
+  };
+}
+
+async function openExecution(id, { scroll = true } = {}) {
+  if (state.busy) return;
+  let r;
+  try {
+    r = await api(`/executions/${encodeURIComponent(id)}`);
+  } catch (e) {
+    showError(`Execution ${id} could not be opened.`, e.message);
+    return;
+  }
+  hideError();
+  // Stored claims include explicit nulls that scenario files omit; treat missing as null when matching.
+  const sameClaim = (a, b) => Object.keys({ ...a, ...b }).every((k) => (a[k] ?? null) === (b[k] ?? null));
+  const match = state.scenarios.find((s) => sameClaim(s.claim, r.claim));
+  if (match) selectScenario(match.id, false);
+  else {
+    state.current = { id: null, label: `Recorded execution ${r.execution_id}`, claim: r.claim, watch: "A recorded execution from your history." };
+    document.querySelectorAll(".scenario").forEach((el) => el.setAttribute("aria-checked", "false"));
+    $("#watch-text").textContent = state.current.watch;
+    setClaimText(r.claim);
+  }
+  const decision = decisionFromRecord(r);
+  state.last = { claim: r.claim, decision, replay: r, scenario: `Recorded · ${r.execution_id}`, revision: state.revision };
+  state.replay = r;
+  render(decision, r, null);
+  renderFlow(r);
+  updateResultContext();
+  markCurrentExecution(r.execution_id);
+  loadHistory();
+  if (scroll) $("#results").scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+}
+
+async function copyExecutionLink(id, button) {
+  try {
+    await navigator.clipboard.writeText(executionLink(id));
+    button.textContent = "Copied ✓";
+  } catch {
+    window.prompt("Copy this link:", executionLink(id));
+  }
+  setTimeout(() => { button.textContent = "Copy link"; }, 1600);
+}
+
 // ------------------------------------------------------------------ evaluation snapshot
 
 async function loadEvaluation() {
@@ -769,7 +870,17 @@ document.addEventListener("DOMContentLoaded", () => {
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); analyze(); }
   });
-  loadScenarios();
+  $("#history-refresh").addEventListener("click", loadHistory);
+  $("#history-filter").addEventListener("change", loadHistory);
+  $("#history-list").addEventListener("click", (e) => {
+    const open = e.target.closest("[data-open]"), copy = e.target.closest("[data-copy]");
+    if (open) openExecution(open.dataset.open);
+    if (copy) copyExecutionLink(copy.dataset.copy, copy);
+  });
+  // A shared link (/?execution=EXE-…) opens that decision once the scenarios have loaded.
+  const shared = new URLSearchParams(location.search).get("execution");
+  loadScenarios().then(() => (shared ? openExecution(shared, { scroll: true }) : null));
+  loadHistory();
   loadEvaluation();
   loadVersions();
 });

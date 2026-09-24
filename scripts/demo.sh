@@ -7,6 +7,9 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://localhost:8000}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UNKNOWN="$ROOT/data/claims/04_ambiguous_emergency_unknown.json"
+# History is scoped to an anonymous visitor cookie: keep one jar for the whole demo.
+JAR="$(mktemp)"; trap 'rm -f "$JAR"' EXIT
+CURL=(curl -sf -c "$JAR" -b "$JAR")
 CONFIRMED="$ROOT/data/claims/04b_ambiguous_emergency_confirmed.json"
 
 step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
@@ -32,10 +35,10 @@ for key in sys.argv[1:]:
 ' "$@"
 }
 
-post_claim() { curl -sf -X POST "$BASE_URL/claims/analyze" -H 'Content-Type: application/json' -d @"$1"; }
+post_claim() { "${CURL[@]}" -X POST "$BASE_URL/claims/analyze" -H 'Content-Type: application/json' -d @"$1"; }
 
 step "0. Service health"
-curl -sf "$BASE_URL/health" | show status llm_provider model workflow_version prompt_version policies_loaded
+"${CURL[@]}" "$BASE_URL/health" | show status llm_provider model workflow_version prompt_version policies_loaded
 
 step "1. Claim arrives: knee MRI, \$1,840, GOLD_PPO, no prior auth, emergency status UNKNOWN (null)"
 python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print({k: c[k] for k in ("claim_id","procedure","amount","plan","prior_authorization","emergency_indicator","date_of_service")})' "$UNKNOWN"
@@ -48,7 +51,7 @@ EXEC_ID="$(echo "$FIRST" | python3 -c 'import json,sys; print(json.load(sys.stdi
 pause
 
 step "3. Decision replay for $EXEC_ID — policies, versions, tools, routing (no chain-of-thought)"
-curl -sf "$BASE_URL/executions/$EXEC_ID" | show workflow_version prompt_version model retrieved_policy_versions tool_summary routing_trail latency_ms input_tokens output_tokens estimated_cost
+"${CURL[@]}" "$BASE_URL/executions/$EXEC_ID" | show workflow_version prompt_version model retrieved_policy_versions tool_summary routing_trail latency_ms input_tokens output_tokens estimated_cost
 pause
 
 step "4. Analyst confirms the emergency and the 72h retro-authorization request, then re-submits"
@@ -56,8 +59,8 @@ SECOND="$(post_claim "$CONFIRMED")"
 echo "$SECOND" | show recommendation deterministic_outcome confidence risk_level human_review_required policy_evidence
 pause
 
-step "5. Audit history for CLM-92811 — every execution is kept"
-curl -sf "$BASE_URL/claims/CLM-92811/audit" | python3 -c '
+step "5. Your audit history for CLM-92811 — every execution is kept (scoped to this visitor)"
+"${CURL[@]}" "$BASE_URL/claims/CLM-92811/audit" | python3 -c '
 import json, sys
 for r in json.load(sys.stdin):
     ts, eid, rec = r["timestamp"][:19], r["execution_id"], r["recommendation"]

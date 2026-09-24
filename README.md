@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       51 behaviour tests + 8 browser tests for the UI
+tests/                       56 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -174,6 +174,7 @@ The **workbench UI** at `/` is plain HTML, CSS and JavaScript served by the same
 - **live progress while the analysis runs**: each step lights up as the backend completes the matching LangGraph node (streamed from the API, not a simulated animation), then the recorded path
 - which workflow steps actually ran
 - a before/after comparison when the same claim is re-analyzed
+- **your execution history**: every analysis from this browser, reopenable into the workbench, with a shareable link per decision
 - the latest evaluation snapshot
 
 ---
@@ -291,11 +292,11 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 51 tests
+pytest                              # 56 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
-Optional browser tests for the workbench UI (8 scenarios, Node + Playwright, mock provider, isolated database):
+Optional browser tests for the workbench UI (9 scenarios, Node + Playwright, mock provider, isolated database):
 
 ```bash
 npm i --no-save playwright && npx playwright install chromium
@@ -341,6 +342,10 @@ docker compose run --rm claimpilot python -m pytest -p no:cacheprovider
 
 When a limit is hit the API returns `429` before any LLM call, and `/health` shows current usage. The counters live in process memory, which is enough for one container; several replicas would need a shared store. Also set a **hard monthly spend limit on the key itself** in the provider's dashboard, ideally with a dedicated key for this demo. That is the backstop if everything else fails.
 
+### Execution history and privacy in the public demo
+
+There is no login, so history is scoped to an **anonymous visitor cookie** (`cp_visitor`: random, `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS, 90 days). Only a SHA-256 hash of it is stored with each execution. Each visitor sees only their own runs in `GET /executions`, `GET /claims/{id}/audit` and the UI. A single decision stays shareable by its unguessable execution ID. The list view leaves out free-text claim fields. In production, history would be scoped by authenticated identity and role (analyst, supervisor, auditor) instead of a cookie.
+
 ### Deploying
 
 One container: API, UI and evaluation snapshot. Deployment is automated:
@@ -354,8 +359,9 @@ Platform settings are versioned in `railway.json`. Keys live only in the platfor
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/claims/analyze` | Run the workflow; returns `ClaimDecision`. With `Accept: application/x-ndjson` it streams one event per completed LangGraph node, then the decision (the UI uses this for live progress) |
-| `GET` | `/executions/{execution_id}` | **Decision replay**: outcome, reasons, evidence, policy versions, tool summary, routing trail, model/prompt/workflow versions, latency, tokens, cost |
-| `GET` | `/claims/{claim_id}/audit` | Every execution for a claim |
+| `GET` | `/executions/{execution_id}` | **Decision replay** (shareable by ID; also opens in the UI at `/?execution=…`): outcome, reasons, evidence, policy versions, tool summary, routing trail, model/prompt/workflow versions, latency, tokens, cost |
+| `GET` | `/executions` | **Your** recent executions (outcome, model, latency, cost), newest first; `?claim_id=` and `?limit=` filters |
+| `GET` | `/claims/{claim_id}/audit` | Every execution of a claim in **your** history, as full records |
 | `GET` | `/metrics` | Volume, human-review rate, latency, tokens, cost |
 | `GET` | `/health` | Liveness, provider/model, prompt and workflow versions |
 | `GET` | `/` | Demo workbench UI (static page; uses the endpoints above) |

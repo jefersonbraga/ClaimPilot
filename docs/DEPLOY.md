@@ -50,7 +50,11 @@ After that, every push to `main` goes through CI and then to production.
 - Railway's usage limit (Workspace → Usage → set a hard limit);
 - a small prepaid balance on the LLM provider account.
 
-**Audit data:** the SQLite audit store lives in the container and resets on each deploy, which is fine for a demo. To keep it, attach a Railway volume at `/data` and set `RAILWAY_RUN_UID=0`, because the image runs as a non-root user and volumes mount as root. For real use, move the audit to a managed database.
+**Audit data and visitor history (recommended):** the SQLite audit store lives at `/data/claimpilot.db`. Without a volume it resets on every deploy, which also clears each visitor's history. To keep it:
+1. **Service → Volumes → Add volume**, mount path `/data`.
+2. **Variables:** add `RAILWAY_RUN_UID=0`. The image runs as a non-root user and Railway mounts volumes as root.
+
+For real use, move the audit to a managed database with retention controls.
 
 ## Google Cloud Run (alternative)
 
