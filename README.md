@@ -108,7 +108,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       49 behaviour tests + browser tests for the UI
+tests/                       50 behaviour tests + 8 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 ```
 
@@ -285,7 +285,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 49 tests
+pytest                              # 50 tests
 python -m evals.run                 # 21-case evaluation
 ```
 

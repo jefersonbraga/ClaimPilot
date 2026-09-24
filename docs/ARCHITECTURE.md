@@ -540,6 +540,29 @@ sequenceDiagram
 
 ---
 
+### Live progress (same endpoint, streamed)
+
+When the client sends `Accept: application/x-ndjson`, the route runs the same graph with `graph.stream(..., stream_mode="updates")`. It emits one line per completed node, then the decision. The demo UI uses this to light up each step as it really completes. Every other client still gets the single JSON `ClaimDecision`.
+
+```mermaid
+sequenceDiagram
+    participant UI as Workbench UI
+    participant API as POST /claims/analyze
+    participant G as LangGraph (graph.stream)
+
+    UI->>API: claim + Accept: application/x-ndjson
+    API->>G: stream(initial state, stream_mode="updates")
+    loop each completed node
+        G-->>API: {node: delta}
+        API-->>UI: {"event":"node","node":"retrieve_policy","trail":"…"}
+        UI->>UI: mark step done, pulse the next one
+    end
+    API-->>UI: {"event":"decision","decision":{…}}
+    UI->>API: GET /executions/{id}  (recorded path for replay)
+```
+
+---
+
 ## 7. Deterministic rule engine (UML activity)
 
 What `check_eligibility` and `check_authorization` do together. The key design choices:
