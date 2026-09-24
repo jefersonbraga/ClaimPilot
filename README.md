@@ -106,9 +106,10 @@ app/
   workflows/guardrails.py    grounding, conflict detection, risk & escalation rules
   observability/audit.py     SQLite audit store + JSON logs
 data/                        10 synthetic policies, members, authorizations, history, demo claims
-evals/                       20-case evaluation harness
-tests/                       38 behaviour tests
-scripts/demo.sh              2–3 minute scripted demo
+evals/                       21-case evaluation harness + committed real-model run
+  static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
+tests/                       48 behaviour tests
+scripts/demo.sh              2–3 minute scripted demo (terminal)
 ```
 
 ---
@@ -136,7 +137,7 @@ There is also a **safety invariant** as defence in depth. Even if a future chang
 
 These rules are tested directly:
 - `tests/test_guardrails.py` includes an **exhaustive safety-matrix test**. It combines every rule verdict, model recommendation, confidence level, grounding state, risk state and missing-data state, and asserts that an autonomous decision only happens when every control agrees.
-- `tests/test_evals.py` runs the full 20-case suite with a **reckless model** that approves everything at 0.99 confidence, and with a model that returns **garbage**. In both runs, unsafe autonomous actions stay at 0.
+- `tests/test_evals.py` runs the full evaluation suite with a **reckless model** that approves everything at 0.99 confidence, and with a model that returns **garbage**. In both runs, unsafe autonomous actions stay at 0.
 
 Responses never contain chain-of-thought. They contain a 2–4 sentence operational summary, verified evidence, tool results and the routing trail.
 
@@ -154,42 +155,54 @@ The main scenario is an ambiguous claim, walked through in **[DEMO.md](DEMO.md)*
 
 ```bash
 uvicorn app.main:app              # or: docker compose up --build
-./scripts/demo.sh                 # needs only curl + python3
+open http://localhost:8000        # demo workbench UI
+./scripts/demo.sh                 # same story in the terminal (curl + python3 only)
 ```
+
+The **workbench UI** at `/` is plain HTML, CSS and JavaScript served by the same FastAPI app: no build step, no framework, no second service. It only calls the public API. It shows:
+- the decision, with the checks that drove it
+- missing information and escalation reasons
+- verified policy evidence (policies added by the second retrieval pass are marked)
+- deterministic tool results
+- execution metadata, and the full decision replay (formatted or raw JSON)
+- which workflow steps actually ran
+- a before/after comparison when the same claim is re-analyzed
+- the latest evaluation snapshot
 
 ---
 
 ## Evaluation
 
-`python -m evals.run` pushes 20 labelled synthetic cases through the **same workflow the API uses**. It then computes every metric from the audit records the workflow wrote; nothing is hardcoded.
+`python -m evals.run` pushes 21 labelled synthetic cases through the **same workflow the API uses**. It then computes every metric from the audit records the workflow wrote; nothing is hardcoded.
 
 The cases cover:
 - approvals and denials
 - policy versioning by date of service
-- emergency exemptions (confirmed, denied and unknown)
+- emergency exemptions (confirmed, denied, unknown, and missing the retro-authorization condition)
 - regional policy conflicts
 - duplicates and benefit limits
 - HMO network rules
 - inactive and unknown members
 - incomplete claims
 
-Current run (offline `MockLLM`):
+Same 21 cases, same workflow, two providers:
 
-```
-Cases evaluated:             20
-Recommendation accuracy:     100%
-Correct policy retrieval:    100%
-Grounded responses:          100% (of 20 LLM-analyzed cases)
-Correct escalation:          100%
-Unsafe autonomous actions:   0
-Invalid structured outputs:  0
-Human review rate:           40%
-Latency avg / p50 / p95:     2.0 / 1.9 / 2.1 ms (LLM avg 0.1 ms)
-Avg tokens in / out:         924 / 181
-Estimated avg cost/claim:    $0.000660
-```
+| | Mock (CI gate) | **DeepSeek `deepseek-flash`** (real model) |
+|---|---|---|
+| Recommendation accuracy | 100% | **100%** |
+| Correct policy retrieval | 100% | **100%** |
+| Grounded responses | 100% | **100%** |
+| Correct escalation | 100% | **100%** |
+| **Unsafe autonomous actions** | **0** | **0** |
+| Invalid structured outputs | 0 | 0 |
+| Human review rate | 43% | 43% |
+| Latency p50 / p95 | 0.9 / 1.0 ms | 2.02 / 2.69 s |
+| Avg tokens in / out | 936 / 183 (estimated) | 979 / 371 |
+| Estimated cost per claim | n/a | **$0.00074** |
 
-Every run also writes `evals/results/latest.json`: the flat summary, including p50/p95 latency and token and cost averages, plus per-case rows. When a case fails a check, the console prints its diagnostics:
+The real-model run is committed at [`evals/reference/deepseek-flash.json`](evals/reference/deepseek-flash.json): summary plus per-case rows with the model's reasoning summaries. Prices are DeepSeek's peak-hour list prices, set in `.env`.
+
+Every run also writes `evals/results/latest.json`. When a case fails a check, the console prints its diagnostics:
 - expected vs. actual recommendation
 - the rule verdict vs. the model's view, and confidence
 - expected vs. retrieved policies, with the missing ones called out
@@ -199,9 +212,10 @@ Every run also writes `evals/results/latest.json`: the flat summary, including p
 
 **How to read these numbers:**
 
-- **The mock run tests the controls, not model quality.** `MockLLM` is a deterministic stand-in that follows the prompt's rules, so its accuracy is expected to be high. The mock run proves that routing, grounding, escalation, retrieval and audit behave correctly and reproducibly, which makes it a good CI gate. Its latency and cost reflect only the workflow; token counts are estimates.
-- **The real-model run is where accuracy, grounding and cost mean something.** Set `LLM_API_KEY` and run `python -m evals.run --provider openai`. **That run has not been done yet**, because no API key was available while building this. Without a key, the command exits with code 2 rather than producing numbers. The code path itself is tested end to end against a local OpenAI-compatible stub server (`tests/test_evals.py`).
+- **Mock vs. real.** `MockLLM` is a deterministic stand-in: it proves routing, grounding, escalation, retrieval and audit behave correctly, and it gates CI without a key. The real-model run measures what the mock cannot: whether a model interprets policy text, cites it verbatim and stays inside the guardrails. It also gives real latency and cost.
 - **Unsafe autonomous actions** counts autonomous APPROVE/DENY decisions that were wrong, or that should have been escalated. It is the metric that would gate a rollout.
+- **Model choice.** The workflow is model-agnostic: any OpenAI-compatible endpoint works, and the real run used DeepSeek because that key was available. For a US healthcare deployment the model would sit behind a BAA-covered or in-boundary gateway (e.g. Azure OpenAI); the data here is synthetic, so no PHI left the machine.
+- **Accidental outage test.** One run was misconfigured with a model name the provider rejected. All 21 cases went to human review with the provider error in the replay, and there were 0 unsafe actions. That is the fallback path working as designed.
 
 Metric definitions:
 
@@ -234,10 +248,28 @@ The relevance floor came from the second iteration. Without it, the second pass 
 
 **Result.** Policy retrieval went from **95% to 100%**, with every other metric unchanged. Regression tests cover the original case, the generalisation, and the skip path when there are no findings. With the second pass disabled, those tests fail.
 
+### Finding 2: the real model found a requirement the rules did not encode
+
+**What happened.** On the first DeepSeek run, accuracy and correct escalation were **95% (19/20)**. In `mri-emergency-confirmed` the rules said PASS: the emergency was documented, so prior authorization was waived. The model agreed with the rules but listed *"confirmation that retrospective authorization was requested within 72 hours"* as missing, so the guardrails escalated the case instead of approving it.
+
+**Why.** The model was right. POL-EMRG-002's text says *"The provider must request retrospective authorization within 72 hours of the emergency service"*, but the machine-readable `rule` block only encoded "emergency documented → waive". The rules engine was **less** strict than the policy it claims to implement, and nothing in the data or tests noticed. This is the kind of gap the LLM is there to catch: it reads the policy text, not just the encoded rule.
+
+**What changed.**
+- Encoded the condition in POL-EMRG-002's rule block (`retro_authorization_hours: 72`, for the prior-authorization waiver only).
+- Added `retro_auth_requested` (true / false / unknown) to the claim. `check_emergency_exemption` now returns INDETERMINATE when it is unknown and FAIL when it is false.
+- Added an eval case for "emergency confirmed, retro-authorization unknown" and a regression test. The demo's *Emergency Confirmed* scenario now supplies both facts.
+- `WORKFLOW_VERSION` → 1.2.0, so audit records show which rule logic produced them.
+
+**Result.** DeepSeek went to **100% on all 21 cases**, and the mock stayed at 100%. The system did the right thing both before and after: it escalated rather than approving on incomplete conditions. The fix makes the deterministic layer faithful to the policy.
+
+**Lesson for production.** Rule encodings drift from policy text. Two controls would catch this systematically:
+- a check that every obligation in the policy text has a matching encoded rule (an LLM-assisted policy-to-rule diff, reviewed by a person);
+- versioning the rule encoding separately from the policy prose. Here the prose stayed at v1.0 and only the rule changed.
+
 **Still open** (see [Trade-offs](#trade-offs)):
-- The mock can't measure interpretation quality; the real-model run is pending.
+- 21 cases is a smoke test, not a benchmark. The next step is a larger, analyst-labelled set, and repeated runs to measure variance.
 - TF-IDF will not scale to a real policy corpus.
-- 20 cases is a smoke test, not a benchmark.
+- One real model has been evaluated. Comparing a second provider would show sensitivity to model choice.
 
 ---
 
@@ -250,17 +282,26 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 38 tests
-python -m evals.run                 # 20-case evaluation
+pytest                              # 48 tests
+python -m evals.run                 # 21-case evaluation
 ```
 
-Real model (any OpenAI-compatible endpoint):
+Real model: one client serves every OpenAI-compatible provider, with ready profiles for **DeepSeek** and **Groq** and a generic profile for OpenAI, Azure OpenAI, gateways or Ollama:
 
 ```bash
-cp .env.example .env                # set LLM_API_KEY, LLM_MODEL, optionally LLM_BASE_URL and prices
+cp .env.example .env                # set one key: DEEPSEEK_API_KEY, GROQ_API_KEY or LLM_API_KEY (+ LLM_BASE_URL)
 set -a; source .env; set +a
-python -m evals.run --provider openai
+python -m evals.run --provider deepseek     # or: groq | openai
 ```
+
+| `LLM_PROVIDER` | Key | Base URL | Default model |
+|---|---|---|---|
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` | `deepseek-flash` |
+| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| `openai` (generic) | `LLM_API_KEY` / `OPENAI_API_KEY` | `LLM_BASE_URL` (optional) | `LLM_MODEL` |
+| `auto` (default) | first key found | | falls back to `mock` |
+
+Each provider keeps its own key, so switching is one line. Each profile carries list prices for the cost estimate and the daily budget (`app/config.py`); override them with `LLM_PRICE_*`.
 
 Docker:
 
@@ -269,6 +310,39 @@ docker compose up --build           # reads .env if present
 curl localhost:8000/health
 docker compose run --rm claimpilot python -m pytest -p no:cacheprovider
 ```
+
+### Exposing the demo publicly with a real key
+
+`.env` is ignored by git and by the Docker build, so publishing the repository never publishes the key; it is only read at runtime. Deploying the app with a key is different: anyone who can reach it spends that key. `POST /claims/analyze` is therefore guarded (`app/limits.py`, no extra dependencies):
+
+| Guard | Default | Setting |
+|---|---|---|
+| Requests per minute, per client IP | 10 | `RATE_LIMIT_PER_MINUTE` |
+| Analyses per day, all clients | 300 | `DAILY_MAX_ANALYSES` |
+| LLM spend per day (real providers only, from recorded cost) | $1.00 | `DAILY_LLM_BUDGET_USD` |
+| Output tokens per LLM call | 600 | `LLM_MAX_OUTPUT_TOKENS` |
+| Claim field sizes | bounded in the schema | (422 on oversized input) |
+
+When a limit is hit the API returns `429` before any LLM call, and `/health` shows current usage. The counters live in process memory, which is enough for one container; several replicas would need a shared store. Also set a **hard monthly spend limit on the key itself** in the provider's dashboard, ideally with a dedicated key for this demo. That is the backstop if everything else fails.
+
+### Deploying (single container)
+
+The image is the whole app: API, UI and evaluation snapshot. Any container host works. For Google Cloud Run:
+
+```bash
+# key goes to Secret Manager: never into the repo, the image or shell history
+read -s KEY && printf %s "$KEY" | gcloud secrets create deepseek-key --data-file=- && unset KEY
+
+gcloud run deploy claimpilot --source . --region us-central1 --port 8000 \
+  --allow-unauthenticated --max-instances 1 --memory 512Mi \
+  --set-env-vars LLM_PROVIDER=deepseek,DAILY_LLM_BUDGET_USD=1 \
+  --set-secrets DEEPSEEK_API_KEY=deepseek-key:latest
+```
+
+- `--max-instances 1`: the rate-limit and budget counters live in memory, so one instance makes them global.
+- The container runs uvicorn with `--proxy-headers`, so the per-client limit sees the visitor's IP rather than the platform proxy's.
+- The SQLite audit is ephemeral on Cloud Run (lost when the instance restarts). That is fine for a demo; production would use a managed database.
+- Keep only a small prepaid balance on the provider account. It is the final cap on spend.
 
 ### API
 
@@ -279,6 +353,9 @@ docker compose run --rm claimpilot python -m pytest -p no:cacheprovider
 | `GET` | `/claims/{claim_id}/audit` | Every execution for a claim |
 | `GET` | `/metrics` | Volume, human-review rate, latency, tokens, cost |
 | `GET` | `/health` | Liveness, provider/model, prompt and workflow versions |
+| `GET` | `/` | Demo workbench UI (static page; uses the endpoints above) |
+| `GET` | `/demo/scenarios` | Predefined synthetic demo claims (`data/claims/scenarios.json`) |
+| `GET` | `/evals/latest` | Summary of the last `python -m evals.run` (404 until one exists; the Docker image runs it at build time) |
 
 Versions are static constants: `WORKFLOW_VERSION` in `app/config.py` and `PROMPT_VERSION` in `app/llm/prompts.py`. Both are stamped on every execution record.
 

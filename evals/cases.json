@@ -86,7 +86,7 @@
   },
   {
     "case_id": "mri-emergency-confirmed",
-    "description": "WOW case after the analyst confirms the emergency",
+    "description": "WOW case after the analyst confirms the emergency and the retro-authorization request",
     "claim": {
       "claim_id": "EV-05",
       "member_id": "MBR-10023",
@@ -98,9 +98,33 @@
       "prior_authorization": false,
       "date_of_service": "2026-09-10",
       "emergency_indicator": true,
-      "provider_network": "IN"
+      "provider_network": "IN",
+      "retro_auth_requested": true
     },
     "expected_recommendation": "APPROVE",
+    "expected_policy_ids": [
+      "POL-MRI-001",
+      "POL-EMRG-002"
+    ]
+  },
+  {
+    "case_id": "mri-emergency-retro-auth-unknown",
+    "description": "Emergency confirmed, but no evidence the 72h retro-authorization was requested",
+    "claim": {
+      "claim_id": "EV-21",
+      "member_id": "MBR-10023",
+      "provider": "Synthetic Provider",
+      "procedure": "MRI_KNEE",
+      "amount": 1840,
+      "diagnosis_code": "M25.561",
+      "plan": "GOLD_PPO",
+      "prior_authorization": false,
+      "date_of_service": "2026-09-10",
+      "emergency_indicator": true,
+      "provider_network": "IN",
+      "retro_auth_requested": null
+    },
+    "expected_recommendation": "HUMAN_REVIEW",
     "expected_policy_ids": [
       "POL-MRI-001",
       "POL-EMRG-002"

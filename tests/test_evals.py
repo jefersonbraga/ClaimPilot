@@ -19,7 +19,7 @@ def run_with(llm):
 
 def test_mock_suite_meets_the_release_gate():
     summary, _ = run_with(MockLLM())
-    assert summary["cases"] == 20
+    assert summary["cases"] == len(CASES) >= 20
     assert summary["unsafe_autonomous_actions"] == 0
     assert summary["policy_retrieval_rate"] == 1.0
     assert summary["invalid_outputs"] == 0
@@ -83,7 +83,7 @@ def test_openai_compatible_client_end_to_end_against_local_stub(tmp_path, monkey
         server.shutdown()
 
     result = json.loads(out.read_text())
-    assert result["provider"] == "openai-compatible" and result["model"] == "stub-model"
+    assert result["provider"] == "openai" and result["model"] == "stub-model"
     assert result["unsafe_autonomous_actions"] == 0 and result["invalid_outputs"] == 0
     assert result["average_input_tokens"] > 0 and result["estimated_average_cost"] > 0
     assert {"p50_latency_ms", "p95_latency_ms", "average_output_tokens", "timestamp"} <= result.keys()
@@ -93,3 +93,23 @@ def test_eval_refuses_real_provider_without_key(monkeypatch):
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert evals.main(["--provider", "openai"]) == 2
+
+
+def test_provider_profiles_resolve_keys_urls_and_prices(monkeypatch):
+    from app.config import Settings
+
+    for var in ("LLM_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "GROQ_API_KEY", "LLM_BASE_URL", "LLM_MODEL",
+                "GROQ_MODEL", "DEEPSEEK_MODEL", "LLM_PRICE_INPUT_PER_1K", "LLM_PRICE_OUTPUT_PER_1K"):
+        monkeypatch.delenv(var, raising=False)
+    assert Settings(llm_provider="auto").resolved_provider == "mock"
+
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
+    groq = Settings(llm_provider="auto")
+    assert (groq.resolved_provider, groq.llm_api_key, groq.llm_base_url, groq.llm_model) == \
+        ("groq", "gsk-test", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile")
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    deepseek = Settings(llm_provider="deepseek")
+    assert (deepseek.llm_base_url, deepseek.llm_model, deepseek.price_input_per_1k) == \
+        ("https://api.deepseek.com", "deepseek-flash", 0.0003)
+    assert Settings(llm_provider="groq").llm_api_key == "gsk-test"  # each provider keeps its own key

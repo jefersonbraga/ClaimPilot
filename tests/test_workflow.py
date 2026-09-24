@@ -66,12 +66,27 @@ def test_ambiguous_emergency_case_escalates_then_resolves_when_information_is_su
     assert first.missing_information == ["emergency_indicator"]
     assert {"POL-MRI-001", "POL-EMRG-002"} <= {e.policy_id for e in first.policy_evidence}
 
-    second = investigator.investigate(demo_claim("04_ambiguous_emergency_unknown", emergency_indicator=True))
+    second = investigator.investigate(demo_claim("04_ambiguous_emergency_unknown", emergency_indicator=True,
+                                                 retro_auth_requested=True))
     assert second.recommendation == Recommendation.APPROVE
     assert {("POL-MRI-001", "2.0"), ("POL-EMRG-002", "1.0")} <= evidence_ids(second)
 
     third = investigator.investigate(demo_claim("04_ambiguous_emergency_unknown", emergency_indicator=False))
     assert third.recommendation == Recommendation.DENY
+
+
+def test_emergency_exemption_requires_the_retro_authorization_condition(make_investigator, demo_claim):
+    """POL-EMRG-002 also requires a retro-authorization request within 72h. This condition was first surfaced by a
+    real model during evaluation (it was in the policy text but not in the encoded rule)."""
+    investigator = make_investigator()
+
+    unknown = investigator.investigate(demo_claim("04_ambiguous_emergency_unknown", emergency_indicator=True))
+    assert unknown.recommendation == Recommendation.HUMAN_REVIEW
+    assert unknown.missing_information == ["retro_auth_requested"]
+
+    not_requested = investigator.investigate(demo_claim("04_ambiguous_emergency_unknown", emergency_indicator=True,
+                                                        retro_auth_requested=False))
+    assert not_requested.recommendation == Recommendation.DENY
 
 
 def test_inactive_member_is_denied(make_investigator, demo_claim):

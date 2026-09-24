@@ -51,7 +51,7 @@ step "3. Decision replay for $EXEC_ID — policies, versions, tools, routing (no
 curl -sf "$BASE_URL/executions/$EXEC_ID" | show workflow_version prompt_version model retrieved_policy_versions tool_summary routing_trail latency_ms input_tokens output_tokens estimated_cost
 pause
 
-step "4. Analyst confirms it was an emergency (emergency_indicator=true) and re-submits"
+step "4. Analyst confirms the emergency and the 72h retro-authorization request, then re-submits"
 SECOND="$(post_claim "$CONFIRMED")"
 echo "$SECOND" | show recommendation deterministic_outcome confidence risk_level human_review_required policy_evidence
 pause
@@ -64,5 +64,5 @@ for r in json.load(sys.stdin):
     emergency = str(r["claim"]["emergency_indicator"])
     print("  ", ts, eid, "emergency=" + emergency.ljust(5), "->", rec)'
 
-step "6. Behaviour across 20 cases (run locally): python -m evals.run"
+step "6. Behaviour across all evaluation cases (run locally): python -m evals.run"
 echo "   Done. Interactive API docs: $BASE_URL/docs"

@@ -56,6 +56,7 @@ Arrows show *uses / depends on*. The workflow is the only component that knows t
 flowchart TB
     subgraph api["API layer — app/main.py"]
         routes["FastAPI routes<br/>/claims/analyze · /claims/{id}/audit<br/>/executions/{id} · /metrics · /health"]
+        ui["Demo workbench — app/static/<br/>plain HTML/CSS/JS at /<br/>(calls the public routes only)"]
     end
 
     subgraph wf["Orchestration — app/workflows/"]
@@ -82,6 +83,7 @@ flowchart TB
     data[("data/<br/>policies · members ·<br/>prior_auths · claim_history")]
     evals["evals/run.py<br/>evaluation harness"]
 
+    ui -.->|fetch| routes
     routes --> wfgraph
     routes --> audit
     evals --> wfgraph
@@ -126,6 +128,7 @@ classDiagram
         +bool? prior_authorization
         +date? date_of_service
         +bool? emergency_indicator
+        +bool? retro_auth_requested
         +IN|OUT? provider_network
         +str? region
     }
@@ -298,7 +301,7 @@ classDiagram
         +complete(system, user) tuple~str,int,int~
     }
     class OpenAICompatibleLLM {
-        +provider = "openai-compatible"
+        +str provider
         +str model
         -OpenAI _client
         +complete(system, user)
@@ -359,6 +362,7 @@ classDiagram
         +str llm_model
         +str? llm_base_url
         +str? llm_api_key
+        +__post_init__() resolves provider profile
         +float price_input_per_1k
         +float price_output_per_1k
         +float confidence_threshold
@@ -404,7 +408,7 @@ classDiagram
 
 ## 5. Workflow state machine (LangGraph)
 
-`app/workflows/claim_graph.py` (`WORKFLOW_VERSION = claim-investigation-wf/1.1.0`). There are two decision points, and both are pure functions of the state:
+`app/workflows/claim_graph.py` (`WORKFLOW_VERSION = claim-investigation-wf/1.2.0`). There are two decision points, and both are pure functions of the state:
 - `after_validation` short-circuits to a human when the claim can't even be identified;
 - `human_review_router` sends the claim to a human if **any** guardrail produced a reason.
 
@@ -568,11 +572,14 @@ flowchart TD
     auth -- no --> paF[FAIL]
 
     paF --> ex{emergency_indicator}
-    ex -- "true" --> exP["PASS (waived,<br/>retro-auth in 72h)"]
+    ex -- "true" --> rt{"retro-auth requested<br/>within 72h?<br/>(POL-EMRG-002 rule)"}
+    rt -- "true" --> exP["PASS (waived)"]
+    rt -- "false" --> exF
+    rt -- "null (unknown)" --> exR["INDETERMINATE<br/>missing: retro_auth_requested"]
     ex -- "false" --> exF[FAIL]
     ex -- "null (unknown)" --> exI["INDETERMINATE<br/>missing: emergency_indicator"]
 
-    paP & paC & paI & exP & exF & exI --> net["check_network<br/>(same exemption pattern for HMO out-of-network)"]
+    paP & paC & paI & exP & exF & exI & exR --> net["check_network<br/>(same exemption pattern for HMO out-of-network)"]
     net --> fin["calculate_financial_threshold<br/>(high value → risk signal)"]
     fin --> agg{aggregate effective outcomes}
     agg -- "any FAIL" --> vF([rules = FAIL])
@@ -675,8 +682,8 @@ sequenceDiagram
     Note over A: Analyst checks the ER record with the provider
 
     alt emergency confirmed
-        A->>CP: same claim, emergency_indicator = true
-        CP->>T: exemption → PASS (retro-auth due in 72h)
+        A->>CP: same claim, emergency_indicator = true, retro_auth_requested = true
+        CP->>T: exemption → PASS (emergency documented, retro-auth requested)
         CP->>L: analyze (verdict = PASS)
         L-->>CP: APPROVE 0.92, cites MRI-001 v2.0 + EMRG-002 v1.0
         CP->>AU: EXE-2 (APPROVE)
@@ -841,11 +848,11 @@ flowchart LR
 
 ## 14. Evaluation pipeline
 
-`python -m evals.run` runs each case through the **same** workflow the API uses, then reads the audit record back. Metrics are computed from what the system actually recorded, not from what the harness thinks it sent. `--provider openai` runs the identical pipeline against a real model and refuses to run without `LLM_API_KEY`.
+`python -m evals.run` runs each case through the **same** workflow the API uses, then reads the audit record back. Metrics are computed from what the system actually recorded, not from what the harness thinks it sent. `--provider deepseek|groq|openai` runs the identical pipeline against a real model and refuses to run without that provider's key.
 
 ```mermaid
 flowchart LR
-    cases[("evals/cases.json<br/>20 labelled cases")] --> loop{{for each case}}
+    cases[("evals/cases.json<br/>21 labelled cases")] --> loop{{for each case}}
     loop --> inv["ClaimInvestigator.investigate()<br/>(real graph, chosen provider)"]
     inv --> rec[("in-memory AuditStore<br/>ExecutionRecord")]
     rec --> cmp["compare with labels"]

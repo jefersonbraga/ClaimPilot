@@ -4,7 +4,7 @@ Runs every case in evals/cases.json through the real workflow and computes metri
 workflow wrote. Nothing is hardcoded: change the model, prompt, policies or thresholds and the numbers move.
 
     python -m evals.run                    # offline, deterministic MockLLM (validates the controls)
-    python -m evals.run --provider openai  # real OpenAI-compatible model (needs LLM_API_KEY)
+    python -m evals.run --provider deepseek  # or openai / groq: real model (needs that provider's key)
 
 Outputs a console report (with diagnostics for every case that needs attention) and a machine-readable
 summary at evals/results/latest.json.
@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
-from app.config import Settings
+from app.config import PROVIDERS, Settings
 from app.llm.client import LLMClient, get_llm
 from app.models.domain import Claim, Recommendation, RuleOutcome
 from app.observability.audit import AuditStore
@@ -193,16 +193,17 @@ def print_report(summary: dict, rows: list[dict]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the ClaimPilot evaluation suite.")
-    parser.add_argument("--provider", default="mock", choices=["mock", "openai", "auto"])
+    parser.add_argument("--provider", default="mock", choices=["mock", "auto", "openai", "deepseek", "groq"])
     parser.add_argument("--cases", default=str(EVAL_DIR / "cases.json"))
     parser.add_argument("--out", default=str(EVAL_DIR / "results" / "latest.json"))
     args = parser.parse_args(argv)
 
     logging.getLogger("claimpilot").setLevel(logging.WARNING)
     settings = Settings(llm_provider=args.provider)
-    if settings.resolved_provider == "openai" and not settings.llm_api_key:
-        print("LLM_API_KEY (or OPENAI_API_KEY) is not set; cannot run a real-model evaluation.\n"
-              "Set it (plus LLM_MODEL / LLM_BASE_URL as needed) or run with --provider mock.", file=sys.stderr)
+    if settings.resolved_provider != "mock" and not settings.llm_api_key:
+        keys = " or ".join(PROVIDERS[settings.resolved_provider]["key_envs"])
+        print(f"{keys} is not set; cannot run a real-model evaluation with provider '{settings.resolved_provider}'.\n"
+              "Set it in the environment (see .env.example) or run with --provider mock.", file=sys.stderr)
         return 2
 
     llm = get_llm(settings)

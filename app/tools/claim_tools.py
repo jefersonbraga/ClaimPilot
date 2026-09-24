@@ -132,8 +132,26 @@ def check_emergency_exemption(claim: Claim, policies: list[Policy], waives: str)
                           data={"waives": waives, "exemption_applies": None, "missing": ["emergency_indicator"]},
                           policy_refs=refs)
     if claim.emergency_indicator:
-        return ToolResult(tool=tool, outcome=RuleOutcome.PASS,
-                          detail=f"Emergency documented on the claim; {waives} is waived. Retrospective authorization due within 72h.",
+        # Condition attached to the exemption itself (e.g. retro-authorization within 72h when PA is waived).
+        retro = [p for p in rules if waives in p.rule.get("retro_authorization_for", [])]
+        if retro:
+            hours = min(p.rule["retro_authorization_hours"] for p in retro)
+            if claim.retro_auth_requested is None:
+                return ToolResult(tool=tool, outcome=RuleOutcome.INDETERMINATE,
+                                  detail=f"Emergency documented, but the exemption also requires a retrospective authorization "
+                                         f"request within {hours}h and the claim does not say whether one was made.",
+                                  data={"waives": waives, "exemption_applies": None, "missing": ["retro_auth_requested"]},
+                                  policy_refs=refs)
+            if not claim.retro_auth_requested:
+                return ToolResult(tool=tool, outcome=RuleOutcome.FAIL,
+                                  detail=f"Emergency documented, but no retrospective authorization was requested within {hours}h; "
+                                         f"the exemption conditions are not met.",
+                                  data={"waives": waives, "exemption_applies": False}, policy_refs=refs)
+            detail = (f"Emergency documented and retrospective authorization requested within {hours}h; "
+                      f"{waives} is waived.")
+        else:
+            detail = f"Emergency documented on the claim; {waives} is waived."
+        return ToolResult(tool=tool, outcome=RuleOutcome.PASS, detail=detail,
                           data={"waives": waives, "exemption_applies": True}, policy_refs=refs)
     return ToolResult(tool=tool, outcome=RuleOutcome.FAIL,
                       detail=f"Claim documents a non-emergency service; the emergency exemption for {waives} does not apply.",

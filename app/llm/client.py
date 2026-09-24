@@ -71,18 +71,21 @@ def parse_analysis(raw: str) -> LLMAnalysis:
 
 
 class OpenAICompatibleLLM:
-    provider = "openai-compatible"
+    """One client for every OpenAI-compatible provider (OpenAI, DeepSeek, Groq, Azure, gateways, Ollama...)."""
 
     def __init__(self, settings: Settings):
         from openai import OpenAI
 
+        self.provider = settings.llm_provider
         self.model = settings.llm_model
+        self.max_output_tokens = settings.llm_max_output_tokens
         self._client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=settings.llm_timeout_s)
 
     def complete(self, system: str, user: str) -> tuple[str, int, int]:
         resp = self._client.chat.completions.create(
             model=self.model,
             temperature=0,
+            max_tokens=self.max_output_tokens,  # hard cap on spend per call
             response_format={"type": "json_object"},
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         )
@@ -128,4 +131,4 @@ class MockLLM:
 
 
 def get_llm(settings: Settings) -> LLMClient:
-    return OpenAICompatibleLLM(settings) if settings.resolved_provider == "openai" else MockLLM()
+    return MockLLM() if settings.resolved_provider == "mock" else OpenAICompatibleLLM(settings)

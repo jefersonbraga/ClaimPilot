@@ -1,0 +1,59 @@
+[
+  {
+    "id": "ambiguous-emergency",
+    "label": "Ambiguous Emergency",
+    "file": "04_ambiguous_emergency_unknown.json",
+    "default": true,
+    "summary": "Knee MRI above the prior-auth threshold, no authorization, emergency status unknown.",
+    "watch": "An emergency exemption might apply, but the emergency status is unknown. Watch the system refuse to guess and name the missing fact."
+  },
+  {
+    "id": "emergency-confirmed",
+    "label": "Emergency Confirmed",
+    "file": "04b_ambiguous_emergency_confirmed.json",
+    "summary": "The same claim after the analyst confirms the emergency and the 72h retro-authorization request.",
+    "watch": "Run this right after the ambiguous case: the missing facts are supplied, and the evidence-backed decision changes."
+  },
+  {
+    "id": "obvious-approval",
+    "label": "Obvious Approval",
+    "file": "01_obvious_approval.json",
+    "summary": "Routine lipid panel for an active member. No prior authorization needed.",
+    "watch": "Every check passes and the model agrees, so an autonomous approval is allowed."
+  },
+  {
+    "id": "missing-authorization",
+    "label": "Missing Authorization",
+    "file": "02_authorization_missing.json",
+    "summary": "Knee MRI above the threshold, no authorization, documented as non-emergency.",
+    "watch": "The rules fail and no exemption applies. The denial cites the exact policy version."
+  },
+  {
+    "id": "policy-conflict",
+    "label": "Policy Conflict",
+    "file": "06_conflicting_policy.json",
+    "summary": "Northeast member: the regional addendum and national policy disagree on the threshold.",
+    "watch": "The deterministic rule engine detects the conflict and blocks any autonomous decision."
+  },
+  {
+    "id": "possible-duplicate",
+    "label": "Possible Duplicate",
+    "file": "07_possible_duplicate.json",
+    "summary": "Knee MRI with a valid authorization, 11 days after an identical paid claim.",
+    "watch": "Claims history finds the duplicate. The second retrieval pass then pulls in the duplicate-claims policy."
+  },
+  {
+    "id": "high-value",
+    "label": "High-Value Claim",
+    "file": "03_high_value.json",
+    "summary": "A $14,500 knee arthroscopy with authorization on file.",
+    "watch": "The rules pass, but high-value claims are never approved autonomously."
+  },
+  {
+    "id": "incomplete",
+    "label": "Incomplete Claim",
+    "file": "05_incomplete.json",
+    "summary": "Physical therapy claim with no billed amount and no diagnosis code.",
+    "watch": "Missing data is a business outcome: the claim is escalated and the missing fields are listed."
+  }
+]

@@ -4,13 +4,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import DATA_DIR
-from app.main import app, get_audit_store, get_investigator
+from app.limits import UsageGuard
+from app.main import app, get_audit_store, get_investigator, get_usage_guard
 
 
 @pytest.fixture
 def client(make_investigator, audit):
     app.dependency_overrides[get_investigator] = lambda: make_investigator()
     app.dependency_overrides[get_audit_store] = lambda: audit
+    app.dependency_overrides[get_usage_guard] = lambda: UsageGuard(per_minute=1000, daily_analyses=1000,
+                                                                   daily_budget_usd=100, counts_spend=False)
     yield TestClient(app)
     app.dependency_overrides.clear()
 

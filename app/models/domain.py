@@ -34,18 +34,19 @@ class Claim(BaseModel):
     """A synthetic claim. Business-required fields are Optional on purpose: a missing field is a
     business condition (route to a human and say what's missing), not an HTTP validation error."""
 
-    claim_id: str = Field(min_length=1)
-    member_id: str | None = None
-    provider: str | None = None
-    procedure: str | None = None
-    amount: float | None = Field(default=None, ge=0)
-    diagnosis_code: str | None = None
-    plan: str | None = None
+    claim_id: str = Field(min_length=1, max_length=40)
+    member_id: str | None = Field(default=None, max_length=40)
+    provider: str | None = Field(default=None, max_length=120)
+    procedure: str | None = Field(default=None, max_length=40)
+    amount: float | None = Field(default=None, ge=0, le=10_000_000)
+    diagnosis_code: str | None = Field(default=None, max_length=16)
+    plan: str | None = Field(default=None, max_length=40)
     prior_authorization: bool | None = None
     date_of_service: date | None = None
     emergency_indicator: bool | None = None  # None == unknown, which is different from False
+    retro_auth_requested: bool | None = None  # emergency cases: retro-authorization requested within the policy window
     provider_network: Literal["IN", "OUT"] | None = "IN"
-    region: str | None = None
+    region: str | None = Field(default=None, max_length=40)
 
 
 REQUIRED_CLAIM_FIELDS = (

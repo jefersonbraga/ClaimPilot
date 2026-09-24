@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClaimPilot AI — Claims Exception Resolution Workbench</title>
+  <meta name="description" content="AI-assisted investigation of synthetic healthcare claims exceptions. Independent technical demonstration.">
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234338ca'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path d="M9 17l5 5 9-11" /></svg>
+        </span>
+        <span class="brand-name">ClaimPilot <b>AI</b></span>
+      </div>
+      <nav class="topnav" aria-label="Page">
+        <a href="#workbench">Workbench</a>
+        <a href="#how">How it works</a>
+        <a href="#evaluation">Evaluation</a>
+        <a href="/docs" target="_blank" rel="noopener">API docs ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- 1. Hero -->
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Claims Exception Resolution Workbench</p>
+        <h1>From claim exception<br>to evidence-backed action.</h1>
+        <p class="lede">ClaimPilot investigates the exceptions your rules engine cannot resolve.
+          Facts checked. Policies cited. Uncertainty handed to a human.</p>
+        <div class="hero-actions">
+          <a class="btn-primary" href="#workbench">Try a scenario <span aria-hidden="true">↗</span></a>
+          <a class="hero-explore" href="#how">Explore the workflow <span aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="badges" aria-label="Properties">
+          <li><span class="dot dot-neutral"></span>Synthetic data</li>
+          <li><span class="dot dot-amber"></span>Human-in-the-loop</li>
+          <li><span class="dot dot-indigo"></span>Evidence grounded</li>
+          <li><span class="dot dot-green"></span>Audit replay</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="how" class="section workflow-section" aria-labelledby="workflow-title">
+      <div class="wrap">
+        <div class="section-head workflow-heading">
+          <div><p class="eyebrow">Inside the investigation</p><h2 id="workflow-title">One claim. A traceable path.</h2></div>
+          <p>Rules establish facts. AI interprets. Humans resolve doubt.</p>
+        </div>
+        <div class="workflow-shell">
+          <div class="workflow-toolbar">
+            <p id="flow-status" role="status">Conceptual workflow · select a step to explore</p>
+            <div class="flow-controls">
+              <button type="button" class="btn-secondary" id="flow-play" disabled>Replay execution</button>
+              <button type="button" class="link-btn" id="flow-restart" disabled>Restart</button>
+            </div>
+          </div>
+          <div class="workflow-board" id="flow-board">
+            <svg id="flow-edges" aria-hidden="true" focusable="false"></svg>
+            <ol id="flow" class="iso-flow" aria-label="Investigation workflow">
+              <li class="flow-node node-validate" data-step="validate">
+                <button type="button" class="iso-card rules" aria-pressed="true" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">↳</span>INPUT<span class="node-number">01</span></span>
+                  <span class="node-title">Validate claim</span><span class="node-caption">An exception arrives</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Valid claim → retrieve policies. Missing identifiers → human review.</span>
+              </li>
+              <li class="flow-node node-retrieve" data-step="retrieve">
+                <button type="button" class="iso-card rules" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">▤</span>POLICY<span class="node-number">02</span></span>
+                  <span class="node-title">Retrieve policies</span><span class="node-caption">Versioned source of truth</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Continue to deterministic checks.</span>
+              </li>
+              <li class="flow-node node-tools" data-step="tools">
+                <button type="button" class="iso-card rules" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">✓</span>RULES<span class="node-number">03</span></span>
+                  <span class="node-title">Check the facts</span><span class="node-caption">Eligibility, history & rules</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Findings inform the second retrieval pass.</span>
+              </li>
+              <li class="flow-node node-refine" data-step="refine">
+                <button type="button" class="iso-card rules" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">⊕</span>POLICY<span class="node-number">04</span></span>
+                  <span class="node-title">Refine retrieval</span><span class="node-caption">Follow the findings</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Conditional: skip when there are no findings. Continue to AI.</span>
+              </li>
+              <li class="flow-node node-llm" data-step="llm">
+                <button type="button" class="iso-card ai" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">✧</span>AI · ONE CALL<span class="node-number">05</span></span>
+                  <span class="node-title">Interpret with AI</span><span class="node-caption">Policy text meets context</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Continue to risk controls.</span>
+              </li>
+              <li class="flow-node node-risk" data-step="risk">
+                <button type="button" class="iso-card rules" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">◇</span>CONTROL<span class="node-number">06</span></span>
+                  <span class="node-title">Evaluate risk</span><span class="node-caption">Grounding & guardrails</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Branch: automatic recommendation or human review.</span>
+              </li>
+              <li class="flow-node node-decide" data-step="decide">
+                <button type="button" class="iso-card automatic" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">✓</span>RULES<span class="node-number">07A</span></span>
+                  <span class="node-title">Recommend</span><span class="node-caption">Approve or deny</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Rules and model agree, with no review triggers → record audit.</span>
+              </li>
+              <li class="flow-node node-review" data-step="review">
+                <button type="button" class="iso-card human" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">◎</span>HUMAN<span class="node-number">07B</span></span>
+                  <span class="node-title">Human review</span><span class="node-caption">Uncertainty made explicit</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Alternative branch: escalation with reasons → record audit.</span>
+              </li>
+              <li class="flow-node node-audit" data-step="audit">
+                <button type="button" class="iso-card rules" aria-pressed="false" aria-controls="flow-detail">
+                  <span class="node-meta"><span class="node-icon" aria-hidden="true">≡</span>AUDIT<span class="node-number">08</span></span>
+                  <span class="node-title">Record & replay</span><span class="node-caption">Evidence travels with it</span>
+                  <span class="node-state">Explore step</span>
+                </button>
+                <span class="mobile-connection">Both outcomes are recorded with evidence and execution metadata.</span>
+              </li>
+            </ol>
+          </div>
+          <div class="flow-legend" aria-label="Workflow legend">
+            <span><i class="legend-rules" aria-hidden="true"></i>Deterministic rules</span>
+            <span><i class="legend-ai" aria-hidden="true"></i>AI interpretation</span>
+            <span><i class="legend-human" aria-hidden="true"></i>Human oversight</span>
+            <span class="legend-hint">Select any step for the evidence behind it</span>
+          </div>
+          <div id="flow-detail" class="flow-detail" role="region" aria-label="Selected workflow step" aria-live="polite"></div>
+        </div>
+        <noscript><p>This diagram shows the conceptual workflow. Enable JavaScript to explore steps and run synthetic scenarios.</p></noscript>
+      </div>
+    </section>
+
+    <!-- 2–7. Workbench -->
+    <section id="workbench" class="section">
+      <div class="wrap workbench">
+        <!-- Left: scenario + claim -->
+        <div class="col-input">
+          <div class="card">
+            <div class="card-head">
+              <h2>1 · Choose a scenario</h2>
+              <span class="hint">Synthetic claims</span>
+            </div>
+            <div class="scenarios" id="scenarios" role="radiogroup" aria-label="Demo scenarios">
+              <p class="muted">Loading scenarios…</p>
+            </div>
+            <div class="watch" id="watch" hidden>
+              <span class="watch-k">What to look for</span>
+              <p id="watch-text"></p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h2>2 · Review the claim</h2>
+              <button type="button" class="link-btn" id="reset-claim" title="Restore the scenario's original claim">Reset</button>
+            </div>
+            <div class="claim-summary" id="claim-summary"></div>
+            <details class="claim-editor" id="claim-editor">
+              <summary>Edit claim JSON</summary>
+            <label class="field-label" for="claim-json">Claim JSON <span class="muted">(editable)</span></label>
+            <textarea id="claim-json" spellcheck="false" autocomplete="off" rows="14" aria-describedby="json-status"></textarea>
+            <p class="json-status" id="json-status" aria-live="polite"></p>
+            </details>
+            <button type="button" class="btn-primary" id="analyze">
+              <span class="btn-label">Analyze Claim</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+            <p class="kbd-hint"><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to analyze</p>
+          </div>
+        </div>
+
+        <!-- Right: results -->
+        <div class="col-output" aria-live="polite">
+          <div class="card empty" id="empty-state">
+            <div class="empty-inner">
+              <div class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+              <h3>No analysis yet</h3>
+              <p>The <b>Ambiguous Emergency</b> scenario is selected. Click <b>Analyze Claim</b> to see how the workflow handles
+                a case where a policy exception might apply but a key fact is unknown.</p>
+            </div>
+          </div>
+
+          <div class="alert" id="error" role="alert" hidden></div>
+
+          <div id="results" hidden>
+            <p id="result-context" class="result-context" role="status"></p>
+            <!-- Before / after comparison -->
+            <div class="compare" id="compare" hidden></div>
+
+            <!-- 4. Decision -->
+            <div class="card decision" id="decision">
+              <div class="decision-top">
+                <div>
+                  <span class="k">Recommendation</span>
+                  <div class="verdict" id="verdict"></div>
+                  <p class="verdict-sub" id="verdict-sub"></p>
+                </div>
+                <dl class="stats">
+                  <div><dt>Confidence</dt><dd id="confidence"></dd></div>
+                  <div><dt>Risk level</dt><dd id="risk"></dd></div>
+                  <div><dt>Rule verdict</dt><dd id="rules"></dd></div>
+                  <div><dt>Human review</dt><dd id="review"></dd></div>
+                </dl>
+              </div>
+              <div class="findings" id="findings" hidden>
+                <span class="k">What the checks found</span>
+                <ul id="finding-list"></ul>
+              </div>
+              <div class="missing" id="missing" hidden></div>
+              <div class="reasons" id="reasons" hidden>
+                <span class="k">Why it was escalated</span>
+                <ul id="reason-list"></ul>
+              </div>
+              <div class="summary">
+                <span class="k">Reasoning summary</span>
+                <p id="summary"></p>
+              </div>
+            </div>
+
+            <!-- 5. Evidence -->
+            <div class="card">
+              <div class="card-head">
+                <h2>Policy evidence</h2>
+                <span class="hint" id="evidence-hint"></span>
+              </div>
+              <div id="retrieved" class="retrieved"></div>
+              <div id="evidence" class="evidence"></div>
+            </div>
+
+            <!-- 6. Tools -->
+            <div class="card">
+              <div class="card-head">
+                <h2>Deterministic checks</h2>
+                <span class="hint">Computed in code · authoritative</span>
+              </div>
+              <ul id="tools" class="tools"></ul>
+            </div>
+
+            <!-- 7. Execution -->
+            <div class="card">
+              <div class="card-head">
+                <h2>Execution</h2>
+                <span class="hint">Every decision is recorded</span>
+              </div>
+              <dl class="meta" id="meta"></dl>
+              <div id="replay-unavailable" class="replay-unavailable" hidden>
+                <p id="replay-message" role="status"></p>
+                <button type="button" class="btn-secondary" id="retry-replay">Retry replay lookup</button>
+              </div>
+              <div class="replay-actions">
+                <button type="button" class="btn-secondary" id="replay-btn" aria-expanded="false" aria-controls="replay">
+                  View Full Decision Replay
+                </button>
+              </div>
+              <div class="replay" id="replay" hidden>
+                <div class="tabs" role="tablist" aria-label="Replay view">
+                  <button type="button" role="tab" class="tab active" data-view="formatted" aria-selected="true">Formatted</button>
+                  <button type="button" role="tab" class="tab" data-view="raw" aria-selected="false">Raw JSON</button>
+                </div>
+                <div id="replay-formatted" class="replay-formatted"></div>
+                <pre id="replay-raw" class="replay-raw" hidden></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Evaluation -->
+    <section id="evaluation" class="section">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Evaluation snapshot</h2>
+          <p id="eval-sub">Latest run of <code>python -m evals.run</code>. Metrics are computed from the audit records, not hardcoded.</p>
+        </div>
+        <div id="eval" class="eval-grid"><p class="muted">Loading…</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <p class="disclaimer">
+        <b>Independent technical demonstration using synthetic healthcare data.</b>
+        No PHI or proprietary healthcare data. Not affiliated with or endorsed by any healthcare company.
+        Not a clinical or claims adjudication product.
+      </p>
+      <p class="muted" id="versions"></p>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

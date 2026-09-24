@@ -17,7 +17,13 @@ docker compose up --build
 
 Everything below assumes `http://localhost:8000`. Only `curl` and `python3` are needed; `python3 -m json.tool` does the pretty-printing, so `jq` isn't required.
 
-To run the whole demo in one go instead: `./scripts/demo.sh` (set `NO_PAUSE=1` to skip the pauses).
+**Visual version:** open **http://localhost:8000**. The *Ambiguous Emergency* scenario is preselected.
+1. Click **Analyze Claim**. The result is HUMAN_REVIEW, with the checks that drove it, the missing `emergency_indicator` and the verified evidence.
+2. Click **View Full Decision Replay** to see the stored execution record.
+3. Pick **Emergency Confirmed** and analyze again. A banner shows `HUMAN_REVIEW → APPROVE` and the one field that changed.
+4. Scroll down to the evaluation snapshot.
+
+The steps below are the same story with curl, for a terminal-only demo. To run it in one go: `./scripts/demo.sh` (set `NO_PAUSE=1` to skip the pauses).
 
 ---
 
@@ -67,7 +73,7 @@ curl -s localhost:8000/executions/$EXEC_ID | python3 -m json.tool
 
 ## 5. The analyst supplies the missing fact (~30s)
 
-The analyst confirms with the provider that this was an emergency:
+The analyst confirms with the provider that this was an emergency, and that the retrospective authorization was requested within 72h (a condition of POL-EMRG-002):
 
 ```bash
 curl -s -X POST localhost:8000/claims/analyze \
@@ -75,7 +81,7 @@ curl -s -X POST localhost:8000/claims/analyze \
   -d @data/claims/04b_ambiguous_emergency_confirmed.json | python3 -m json.tool
 ```
 
-> Same claim, one fact changed. `check_emergency_exemption` is now **PASS** (retrospective authorization is due within 72h), the rules return **PASS**, and the recommendation is **APPROVE**, citing POL-MRI-001 v2.0 and POL-EMRG-002 v1.0.
+> Same claim, the missing facts supplied. `check_emergency_exemption` is now **PASS** (emergency documented, retro-authorization requested), the rules return **PASS**, and the recommendation is **APPROVE**, citing POL-MRI-001 v2.0 and POL-EMRG-002 v1.0.
 
 Optional counter-example: the emergency is *not* confirmed.
 
@@ -100,10 +106,10 @@ curl -s localhost:8000/claims/CLM-92811/audit \
 python -m evals.run
 ```
 
-> 20 labelled cases run through the same workflow. The numbers come from the audit records, not from hardcoded values. The metric to watch is **unsafe autonomous actions = 0**. This run uses a deterministic mock model, so it validates the controls. `--provider openai` measures a real model. The suite also found a real bug, a retrieval-ordering issue, which is described in the README under "What the evaluation found".
+> 21 labelled cases run through the same workflow. The numbers come from the audit records, not from hardcoded values. The metric to watch is **unsafe autonomous actions = 0**. Locally this uses the deterministic mock model, which validates the controls. The committed DeepSeek run (`evals/reference/`) scored 100% with 0 unsafe actions, and the UI shows both runs side by side. The evaluation found two real issues, a retrieval-ordering bug and a policy requirement missing from the encoded rules; see "What the evaluation found" in the README.
 
 ---
 
 ### If there's time for one question
 
-**"What stops the LLM from just approving things?"** The final APPROVE or DENY comes from the deterministic rules, not from the model. The model can only make an outcome more conservative. `tests/test_evals.py` runs all 20 cases with a model that approves everything at 0.99 confidence, and unsafe autonomous actions stay at 0.
+**"What stops the LLM from just approving things?"** The final APPROVE or DENY comes from the deterministic rules, not from the model. The model can only make an outcome more conservative. `tests/test_evals.py` runs every case with a model that approves everything at 0.99 confidence, and unsafe autonomous actions stay at 0.

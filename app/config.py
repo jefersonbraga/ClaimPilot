@@ -7,24 +7,51 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 
-WORKFLOW_VERSION = "claim-investigation-wf/1.1.0"  # 1.1.0: findings-driven supplemental retrieval
+WORKFLOW_VERSION = "claim-investigation-wf/1.2.0"  # 1.1.0: findings-driven retrieval · 1.2.0: retro-auth condition on emergency exemption
 
 
 def _float(name: str, default: float) -> float:
     return float(os.getenv(name, default))
 
 
+def _env(*names: str) -> str | None:
+    return next((v for n in names if (v := os.getenv(n))), None)
+
+
+# OpenAI-compatible provider profiles. Each has its own key variable, so switching provider is one line
+# (LLM_PROVIDER=groq) and keys for several providers can sit side by side in .env.
+# Prices are USD per 1K tokens (list prices; verify on the provider's pricing page). LLM_PRICE_* overrides them.
+PROVIDERS = {
+    "openai": {  # generic: OpenAI, Azure OpenAI, a model gateway, vLLM, Ollama... configured with LLM_*
+        "key_envs": ("LLM_API_KEY", "OPENAI_API_KEY"), "model_env": "LLM_MODEL", "base_url_env": "LLM_BASE_URL",
+        "base_url": None, "model": "gpt-4.1-mini", "price_in": 0.0004, "price_out": 0.0016,
+    },
+    "deepseek": {
+        "key_envs": ("DEEPSEEK_API_KEY",), "model_env": "DEEPSEEK_MODEL", "base_url_env": None,
+        "base_url": "https://api.deepseek.com", "model": "deepseek-flash", "price_in": 0.0003, "price_out": 0.0012,
+    },
+    "groq": {
+        "key_envs": ("GROQ_API_KEY",), "model_env": "GROQ_MODEL", "base_url_env": None,
+        "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile",
+        "price_in": 0.00059, "price_out": 0.00079,
+    },
+}
+# With LLM_PROVIDER=auto, the first key found decides the provider.
+AUTO_ORDER = (("LLM_API_KEY", "openai"), ("DEEPSEEK_API_KEY", "deepseek"), ("GROQ_API_KEY", "groq"), ("OPENAI_API_KEY", "openai"))
+
+
 @dataclass(frozen=True)
 class Settings:
-    # LLM
-    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "auto"))  # auto | mock | openai
-    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4.1-mini"))
-    llm_base_url: str | None = field(default_factory=lambda: os.getenv("LLM_BASE_URL") or None)
-    llm_api_key: str | None = field(default_factory=lambda: os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or None)
+    # LLM — auto | mock | openai | deepseek | groq. Fields left as None are resolved from the provider profile.
+    llm_provider: str = field(default_factory=lambda: os.getenv("LLM_PROVIDER", "auto"))
+    llm_model: str | None = None
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
     llm_timeout_s: float = field(default_factory=lambda: _float("LLM_TIMEOUT_S", 30))
-    # USD per 1K tokens, used for cost estimation only.
-    price_input_per_1k: float = field(default_factory=lambda: _float("LLM_PRICE_INPUT_PER_1K", 0.0004))
-    price_output_per_1k: float = field(default_factory=lambda: _float("LLM_PRICE_OUTPUT_PER_1K", 0.0016))
+    llm_max_output_tokens: int = field(default_factory=lambda: int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "600")))
+    # USD per 1K tokens, used for cost estimation and the daily budget.
+    price_input_per_1k: float | None = None
+    price_output_per_1k: float | None = None
 
     # Human-in-the-loop thresholds
     confidence_threshold: float = field(default_factory=lambda: _float("CONFIDENCE_THRESHOLD", 0.80))
@@ -33,13 +60,37 @@ class Settings:
     supplemental_top_k: int = field(default_factory=lambda: int(os.getenv("SUPPLEMENTAL_RETRIEVAL_TOP_K", "2")))
     supplemental_min_score: float = field(default_factory=lambda: _float("SUPPLEMENTAL_RETRIEVAL_MIN_SCORE", 0.15))
 
+    # Public-demo protection (API layer only; the eval harness is not limited)
+    rate_limit_per_minute: int = field(default_factory=lambda: int(os.getenv("RATE_LIMIT_PER_MINUTE", "10")))
+    daily_max_analyses: int = field(default_factory=lambda: int(os.getenv("DAILY_MAX_ANALYSES", "300")))
+    daily_llm_budget_usd: float = field(default_factory=lambda: _float("DAILY_LLM_BUDGET_USD", 1.0))
+
     # Storage
     audit_db_path: str = field(default_factory=lambda: os.getenv("AUDIT_DB_PATH", str(ROOT_DIR / "claimpilot.db")))
 
+    def __post_init__(self):
+        provider = self.llm_provider
+        if provider == "auto":
+            provider = next((p for env, p in AUTO_ORDER if os.getenv(env)), "mock")
+        if provider not in PROVIDERS and provider != "mock":
+            raise ValueError(f"Unknown LLM_PROVIDER '{provider}'. Use: auto, mock, {', '.join(PROVIDERS)}.")
+        profile = PROVIDERS.get(provider, PROVIDERS["openai"])  # mock borrows default prices for its estimates
+        resolved = {
+            "llm_provider": provider,
+            "llm_api_key": self.llm_api_key or (_env(*profile["key_envs"]) if provider != "mock" else None),
+            "llm_model": self.llm_model or _env(profile["model_env"]) or profile["model"],
+            "llm_base_url": self.llm_base_url or (_env(profile["base_url_env"]) if profile["base_url_env"] else None)
+                            or profile["base_url"],
+            "price_input_per_1k": self.price_input_per_1k if self.price_input_per_1k is not None
+                                  else _float("LLM_PRICE_INPUT_PER_1K", profile["price_in"]),
+            "price_output_per_1k": self.price_output_per_1k if self.price_output_per_1k is not None
+                                   else _float("LLM_PRICE_OUTPUT_PER_1K", profile["price_out"]),
+        }
+        for name, value in resolved.items():
+            object.__setattr__(self, name, value)
+
     @property
     def resolved_provider(self) -> str:
-        if self.llm_provider == "auto":
-            return "openai" if self.llm_api_key else "mock"
         return self.llm_provider
 
 
