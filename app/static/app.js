@@ -24,7 +24,7 @@ const VERDICT = {
     sub: "ClaimPilot did not decide on its own. The case goes to an analyst with the reasons and evidence below." },
 };
 
-const state = { scenarios: [], current: null, last: null, replay: null };
+const state = { scenarios: [], current: null, last: null, replay: null, busy: false, revision: 0, retrying: false };
 
 // ------------------------------------------------------------------ API
 
@@ -68,6 +68,7 @@ function selectScenario(id, focus) {
     el.tabIndex = on ? 0 : -1;
     if (on && focus) el.focus();
   });
+  $("#empty-state p").innerHTML = `The <b>${esc(state.current.label)}</b> scenario is selected. Click <b>Analyze Claim</b> to see the recommendation, evidence and recorded workflow.`;
   $("#watch").hidden = false;
   $("#watch-text").textContent = state.current.watch;
   setClaimText(state.current.claim);
@@ -100,12 +101,16 @@ function parseClaim() {
 }
 
 function onClaimEdited() {
+  state.revision += 1;
+  resetFlow();
+  updateResultContext();
   const { claim, error } = parseClaim();
   const status = $("#json-status");
   $("#claim-json").classList.toggle("invalid", !!error);
   status.classList.toggle("error", !!error);
   status.textContent = error ? `Invalid JSON: ${error}` : "Valid JSON · edit any field and re-analyze";
   if (claim) renderClaimSummary(claim);
+  else $("#claim-summary").textContent = "Fix the JSON to preview this claim.";
 }
 
 function renderClaimSummary(c) {
@@ -128,25 +133,42 @@ function renderClaimSummary(c) {
 // ------------------------------------------------------------------ analyze
 
 async function analyze() {
+  if (state.busy) return;
   const { claim, error } = parseClaim();
   if (error) {
+    $("#claim-editor").open = true;
+    $("#claim-json").focus();
     showError("The claim JSON is invalid. Fix it before analyzing.", error);
     return;
   }
+  const revision = state.revision;
+  const scenario = state.current && state.current.label;
   const btn = $("#analyze");
+  state.busy = true;
   btn.disabled = true;
   btn.classList.add("loading");
   btn.querySelector(".btn-label").textContent = "Investigating…";
+  resetFlow();
   hideError();
+  $("#retry-replay").disabled = true;
   try {
     const decision = await api("/claims/analyze", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(claim),
     });
-    const replay = await api(`/executions/${encodeURIComponent(decision.execution_id)}`);
     const previous = state.last;
-    state.last = { claim, decision, replay, scenario: state.current && state.current.label };
-    state.replay = replay;
-    render(decision, replay, previous);
+    const run = { claim, decision, replay: null, scenario, revision };
+    state.last = run;
+    state.replay = null;
+    render(decision, null, previous);
+    setReplayNotice("Loading the recorded execution…", true);
+    try {
+      const replay = await api(`/executions/${encodeURIComponent(decision.execution_id)}`);
+      run.replay = replay;
+      state.replay = replay;
+      renderRecord(decision, replay);
+    } catch (e) {
+      setReplayNotice(`The recommendation is available, but its replay could not be loaded (${e.message}). Retry the lookup without running another analysis.`);
+    }
   } catch (e) {
     if (e.status === 422 && e.body && Array.isArray(e.body.detail)) {
       showError("The API rejected the claim (422 validation error).",
@@ -157,10 +179,56 @@ async function analyze() {
       showError("Analysis failed.", e.message);
     }
   } finally {
+    state.busy = false;
     btn.disabled = false;
     btn.classList.remove("loading");
     btn.querySelector(".btn-label").textContent = "Analyze Claim";
+    $("#retry-replay").disabled = state.retrying;
+    if (state.last && state.last.revision === state.revision && state.replay) renderFlow(state.replay);
+    else resetFlow();
+    updateResultContext();
   }
+}
+
+function setReplayNotice(message, loading = false) {
+  $("#replay-unavailable").hidden = false;
+  $("#replay-message").textContent = message;
+  $("#retry-replay").disabled = loading || state.busy;
+}
+
+async function retryReplay() {
+  if (!state.last || state.busy || state.retrying) return;
+  const run = state.last;
+  state.retrying = true;
+  setReplayNotice("Loading the recorded execution…", true);
+  try {
+    const replay = await api(`/executions/${encodeURIComponent(run.decision.execution_id)}`);
+    if (state.last !== run) return;
+    run.replay = replay;
+    state.replay = replay;
+    renderRecord(run.decision, replay);
+    if (!state.busy && run.revision === state.revision) renderFlow(replay);
+  } catch (e) {
+    if (state.last === run) setReplayNotice(`Replay is still unavailable (${e.message}). The recommendation below is retained.`);
+  } finally {
+    state.retrying = false;
+    $("#retry-replay").disabled = state.busy;
+  }
+}
+
+function updateResultContext() {
+  if (!state.last) return;
+  const stale = state.last.revision !== state.revision;
+  const el = $("#result-context");
+  el.classList.toggle("stale", stale);
+  el.textContent = `${stale ? "Previous execution · inputs have changed. Analyze again to update these results." : "Latest execution"} · ${state.last.decision.claim_id} · ${state.last.scenario || "Edited claim"}`;
+}
+
+function renderRecord(d, r) {
+  renderEvidence(d, r);
+  renderExecution(d, r);
+  $("#replay-unavailable").hidden = !!r;
+  $("#replay-btn").disabled = !r;
 }
 
 function showError(title, detail) {
@@ -177,12 +245,11 @@ function render(d, r, previous) {
   $("#results").hidden = false;
   renderCompare(d, previous);
   renderDecision(d);
-  renderEvidence(d, r);
   renderTools(d);
-  renderExecution(d, r);
-  renderFlow(r);
+  renderRecord(d, r);
+  updateResultContext();
   closeReplay();
-  $("#results").scrollIntoView({ behavior: "smooth", block: "start" });
+  // Keep the workflow in view; results remain immediately below the claim controls.
 }
 
 function renderCompare(d, prev) {
@@ -232,9 +299,9 @@ function renderDecision(d) {
 
 function renderEvidence(d, r) {
   const cited = new Set(d.policy_evidence.map((e) => e.policy_id));
-  const supplemental = new Set(r.supplemental_policy_ids || []);
-  $("#evidence-hint").textContent = `${r.retrieved_policy_ids.length} retrieved · ${d.policy_evidence.length} cited`;
-  $("#retrieved").innerHTML = r.retrieved_policy_ids.map((id) => `
+  const supplemental = new Set(r?.supplemental_policy_ids || []);
+  $("#evidence-hint").textContent = `${r ? r.retrieved_policy_ids.length + " retrieved · " : ""}${d.policy_evidence.length} cited`;
+  $("#retrieved").innerHTML = (r?.retrieved_policy_ids || []).map((id) => `
     <span class="pol ${cited.has(id) ? "cited" : ""}" title="${supplemental.has(id) ? "Added by the second, findings-driven retrieval pass" : "Retrieved from the claim"}">
       ${esc(id)}@${esc(r.retrieved_policy_versions[id])}${supplemental.has(id) ? '<span class="pass2">pass 2</span>' : ""}
     </span>`).join("");
@@ -264,7 +331,7 @@ function renderTools(d) {
 }
 
 function renderExecution(d, r) {
-  const rows = [
+  const rows = r ? [
     ["Execution ID", r.execution_id],
     ["Workflow", r.workflow_version],
     ["Prompt", r.prompt_version],
@@ -273,35 +340,208 @@ function renderExecution(d, r) {
     ["Input tokens", r.input_tokens.toLocaleString("en-US")],
     ["Output tokens", r.output_tokens.toLocaleString("en-US")],
     ["Est. cost", `$${r.estimated_cost.toFixed(6)}`],
-  ];
+  ] : [["Execution ID", d.execution_id], ["Latency", `${d.latency_ms.toFixed(1)} ms`], ["Est. cost", `$${d.estimated_cost.toFixed(6)}`]];
   $("#meta").innerHTML = rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("");
 }
 
-// Light up the "How it works" strip from the real routing trail of this execution.
-function renderFlow(r) {
-  const trail = r.routing_trail;
-  const has = (prefix) => trail.some((s) => s.startsWith(prefix));
-  const steps = {
-    validate: has("validate_claim"),
-    retrieve: has("retrieve_policy"),
-    tools: has("check_authorization"),
-    refine: has("refine_retrieval") && !has("refine_retrieval: skipped"),
-    llm: has("analyze_claim"),
-    risk: has("evaluate_risk"),
-    route: true,
-    audit: true,
-  };
-  document.querySelectorAll("#flow li").forEach((li) => {
-    const s = li.dataset.step;
-    li.classList.remove("visited", "skipped", "end-review", "end-decide");
-    if (s === "route") li.classList.add(r.human_review_required ? "end-review" : "end-decide");
-    else li.classList.add(steps[s] ? "visited" : "skipped");
+// ------------------------------------------------------------------ interactive workflow
+
+const FLOW_STEPS = {
+  validate: { title: "Validate claim", category: "01 · Input", purpose: "Establish what is known before investigating the exception.", input: "The submitted claim and its identifying fields.", output: "A validated claim, or direct escalation when identifiers are missing.", prefixes: ["validate_claim:"] },
+  retrieve: { title: "Retrieve policies", category: "02 · Versioned policy", purpose: "Find policies that apply to this claim and its service date.", input: "Procedure, plan, region and date of service.", output: "Relevant policy text with policy IDs and versions.", prefixes: ["retrieve_policy:"] },
+  tools: { title: "Check the facts", category: "03 · Deterministic rules", purpose: "Establish authoritative facts in code, independently of the model.", input: "Claim, enrollment, authorizations, claim history and policy rules.", output: "Tool findings and a PASS, FAIL or INDETERMINATE rule verdict.", prefixes: ["check_eligibility:", "check_authorization:"] },
+  refine: { title: "Refine retrieval", category: "04 · Findings-driven policy", purpose: "Look for policy context that only becomes relevant after the checks run.", input: "Non-passing checks and deterministic risk signals.", output: "Additional relevant policies; skipped when there are no findings.", prefixes: ["refine_retrieval:"] },
+  llm: { title: "Interpret with AI", category: "05 · One structured model call", purpose: "Read policy text against the facts and explain the exception in context.", input: "Retrieved policy passages, claim and deterministic tool results.", output: "A structured recommendation, citations and a short operational summary. The model cannot override the rules.", prefixes: ["analyze_claim:"] },
+  risk: { title: "Evaluate risk", category: "06 · Guardrails", purpose: "Check grounding, missing information, risk and agreement with the rules.", input: "Rule verdict, model output and verified policy evidence.", output: "Review reasons that block an autonomous outcome when any control fails.", prefixes: ["evaluate_risk:"] },
+  decide: { title: "Recommend", category: "07A · Automatic branch", purpose: "Generate an approval or denial from the deterministic rules when all controls agree.", input: "Conclusive rules, model agreement and no review triggers.", output: "APPROVE or DENY, supported by evidence. This is a synthetic demonstration.", prefixes: ["generate_recommendation:"] },
+  review: { title: "Human review", category: "07B · Escalation branch", purpose: "Make uncertainty explicit so an analyst knows what needs resolving.", input: "Missing identifiers, missing evidence, conflicting policies or other review triggers.", output: "HUMAN_REVIEW with reasons and missing facts. An analyst can supply facts and re-analyze; no human decision is recorded by this demo.", prefixes: ["escalate_to_human:"] },
+  audit: { title: "Record & replay", category: "08 · Audit", purpose: "Keep the recommendation, evidence and execution context together.", input: "Either outcome, its policy evidence and the path through the workflow.", output: "A stored execution with model, prompt and workflow versions, accessible by execution ID.", prefixes: [] },
+};
+const flow = { record: null, selected: "validate", path: [], index: -1, timer: null, paused: false };
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function stepTrail(key, record = flow.record) {
+  return (record?.routing_trail || []).filter((line) => FLOW_STEPS[key].prefixes.some((p) => line.startsWith(p)));
+}
+function stepStatus(key) {
+  if (!flow.record) return "Explore step";
+  // record_audit does not append a trail entry; a fetched record confirms persistence.
+  if (key === "audit") return "✓ Recorded";
+  const lines = stepTrail(key);
+  if (!lines.length) return "— Not taken";
+  if (key === "refine" && lines.some((s) => s.startsWith("refine_retrieval: skipped"))) return "— Skipped";
+  if (key === "llm" && flow.record.llm_error) return "! Attempted · error";
+  return "✓ Executed";
+}
+function isVisited(key) { return /^(✓|!)/.test(stepStatus(key)); }
+
+function selectFlowStep(key) {
+  flow.selected = key;
+  document.querySelectorAll("#flow .iso-card").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.closest("[data-step]").dataset.step === key));
   });
+  const step = FLOW_STEPS[key];
+  let evidence = [];
+  const r = flow.record;
+  if (r) {
+    evidence = stepTrail(key);
+    if (isVisited(key)) {
+      if (key === "retrieve") evidence.push(...r.retrieved_policy_ids.filter((id) => !r.supplemental_policy_ids.includes(id)).map((id) => `${id} @ ${r.retrieved_policy_versions[id]}`));
+      if (key === "tools") evidence.push(...r.tool_summary);
+      if (key === "refine") evidence.push(`Supplemental policies: ${r.supplemental_policy_ids.join(", ") || "none added"}`);
+      if (key === "llm") evidence.push(r.llm_error || r.reasoning_summary);
+      if (key === "risk") evidence.push(...r.human_review_reason);
+      if (key === "review") evidence.push(...r.human_review_reason, ...r.missing_information.map((v) => `Missing: ${v}`));
+      if (key === "audit") evidence.push(`Stored execution: ${r.execution_id}`, `${r.workflow_version} · ${r.prompt_version} · ${r.model}`, "Persistence confirmed by the execution lookup; audit has no separate routing-trail entry.");
+    }
+  }
+  $("#flow-detail").innerHTML = `<div><p class="eyebrow">${esc(step.category)}</p><h3>${esc(step.title)}</h3><p>${esc(step.purpose)}</p></div>
+    <dl><dt>Input</dt><dd>${esc(step.input)}</dd><dt>Output</dt><dd>${esc(step.output)}</dd></dl>
+    ${r ? `<div class="step-evidence"><p><b>${esc(stepStatus(key))}</b> · Recorded execution</p>${evidence.length ? `<ul>${evidence.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>` : "<p>This branch was not taken in this execution.</p>"}</div>` : ""}`;
+}
+
+function clearFlowTimer() {
+  window.clearTimeout(flow.timer);
+  flow.timer = null;
+}
+function resetFlow() {
+  clearFlowTimer();
+  Object.assign(flow, { record: null, path: [], index: -1, paused: false });
+  $("#flow-status").textContent = state.busy ? "Investigating…" : "Conceptual workflow · select a step to explore";
+  $("#flow-play").textContent = "Replay execution";
+  $("#flow-play").disabled = true;
+  $("#flow-restart").disabled = true;
+  paintFlow();
+}
+function renderFlow(r) {
+  clearFlowTimer();
+  flow.record = r;
+  flow.index = -1;
+  flow.paused = false;
+  flow.path = [];
+  for (const line of r.routing_trail) {
+    const key = Object.keys(FLOW_STEPS).find((k) => FLOW_STEPS[k].prefixes.some((p) => line.startsWith(p)));
+    if (key && isVisited(key) && !flow.path.includes(key)) flow.path.push(key);
+  }
+  flow.path.push("audit");
+  $("#flow-status").textContent = `Recorded execution · ${r.claim_id} · ${r.recommendation}`;
+  $("#flow-play").disabled = false;
+  $("#flow-play").textContent = "Replay execution";
+  $("#flow-restart").disabled = false;
+  paintFlow();
+}
+function paintFlow() {
+  document.querySelectorAll("#flow [data-step]").forEach((node) => {
+    const key = node.dataset.step;
+    node.classList.toggle("visited", !!flow.record && isVisited(key));
+    node.classList.toggle("skipped", !!flow.record && !isVisited(key));
+    node.classList.toggle("replay-current", flow.path[flow.index] === key);
+    node.querySelector(".node-state").textContent = stepStatus(key);
+  });
+  selectFlowStep(flow.selected);
+  drawFlowEdges();
+}
+function replayTick() {
+  if (!flow.record) return;
+  flow.index += 1;
+  if (flow.index >= flow.path.length) {
+    flow.index = -1;
+    flow.timer = null;
+    $("#flow-play").textContent = "Replay execution";
+    $("#flow-status").textContent = `Replay complete · recorded execution · ${flow.record.claim_id}`;
+    paintFlow();
+    return;
+  }
+  flow.selected = flow.path[flow.index];
+  $("#flow-status").textContent = `Replay · ${flow.index + 1}/${flow.path.length} · ${FLOW_STEPS[flow.selected].title} · recorded, not live`;
+  paintFlow();
+  flow.timer = window.setTimeout(replayTick, 1100);
+}
+function playFlow() {
+  if (!flow.record) return;
+  if (flow.timer) {
+    clearFlowTimer();
+    flow.paused = true;
+    $("#flow-play").textContent = "Resume replay";
+    $("#flow-status").textContent = `Replay paused · ${FLOW_STEPS[flow.path[flow.index]].title} · recorded, not live`;
+    return;
+  }
+  // Reduced-motion mode advances only on request; there is no automatic animation.
+  if (reducedMotion()) {
+    flow.index = (flow.index + 1) % flow.path.length;
+    flow.selected = flow.path[flow.index];
+    $("#flow-play").textContent = "Next replay step";
+    $("#flow-status").textContent = `Replay · step ${flow.index + 1}/${flow.path.length} · manual, reduced motion`;
+    paintFlow();
+    return;
+  }
+  flow.paused = false;
+  $("#flow-play").textContent = "Pause replay";
+  replayTick();
+}
+function restartFlow() {
+  if (!flow.record) return;
+  clearFlowTimer();
+  flow.index = -1;
+  flow.paused = false;
+  playFlow();
+}
+
+// Orthogonal connectors for the layout: pipeline row → lane → guardrails → two outcomes → audit.
+function drawFlowEdges() {
+  const board = $("#flow-board");
+  if (window.matchMedia("(max-width: 760px)").matches) return;
+  const b = board.getBoundingClientRect();
+  const box = (key) => {
+    const r = $(`#flow [data-step="${key}"] .iso-card`).getBoundingClientRect();
+    return { l: r.left - b.left, r: r.right - b.left, t: r.top - b.top, bo: r.bottom - b.top,
+             cx: (r.left + r.right) / 2 - b.left, cy: (r.top + r.bottom) / 2 - b.top };
+  };
+  // "Passed through": refine runs even when it has nothing to add, so the path continues through it.
+  const passed = (key) => !!flow.record && (isVisited(key) || stepStatus(key) === "— Skipped");
+  const off = [], on_ = [];  // taken path is drawn last so it stays on top where branches share a segment
+  const edge = (points, on, { early = false, label = "", at = null } = {}) => {
+    const out = on ? on_ : off;
+    const d = points.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    out.push(`<path class="flow-edge${on ? " visited" : ""}${early ? " early" : ""}" d="${d}" marker-end="url(#arrow-${on ? "on" : "off"})"/>`);
+    if (label) out.push(`<text class="edge-label${on ? " visited" : ""}" x="${at[0]}" y="${at[1]}" text-anchor="middle">${esc(label)}</text>`);
+  };
+  const gap = 3;  // keep arrow tips just off the card border
+
+  // 1. Pipeline row.
+  for (const [from, to] of [["validate", "retrieve"], ["retrieve", "tools"], ["tools", "refine"], ["refine", "llm"]]) {
+    const a = box(from), c = box(to);
+    edge([[a.r + gap, a.cy], [c.l - gap, c.cy]], passed(from) && passed(to));
+  }
+  // 2. Wrap from the model down the connector lane to the guardrails.
+  const llm = box("llm"), risk = box("risk");
+  const lane = llm.bo + ($("#flow [data-step='risk']").getBoundingClientRect().top - b.top - llm.bo) / 2 - 20;
+  edge([[llm.cx, llm.bo + gap], [llm.cx, lane], [risk.cx, lane], [risk.cx, risk.t - gap]], passed("llm") && passed("risk"));
+
+  // 3. Fork to the two outcomes, then merge into the audit record.
+  const decide = box("decide"), review = box("review"), audit = box("audit");
+  const forkX = (risk.r + decide.l) / 2, mergeX = (decide.r + audit.l) / 2;
+  edge([[risk.r + gap, risk.cy], [forkX, risk.cy], [forkX, decide.cy], [decide.l - gap, decide.cy]], passed("risk") && passed("decide"),
+       { label: "Controls agree", at: [(forkX + decide.l) / 2, decide.cy - 8] });
+  edge([[risk.r + gap, risk.cy], [forkX, risk.cy], [forkX, review.cy], [review.l - gap, review.cy]], passed("risk") && passed("review"),
+       { label: "Review required", at: [(forkX + review.l) / 2, review.cy - 8] });
+  edge([[decide.r + gap, decide.cy], [mergeX, decide.cy], [mergeX, audit.cy], [audit.l - gap, audit.cy]], passed("decide"));
+  edge([[review.r + gap, review.cy], [mergeX, review.cy], [mergeX, audit.cy], [audit.l - gap, audit.cy]], passed("review"));
+
+  // 4. Early exit: unidentifiable claims skip the investigation entirely (dashed, below the diagram).
+  const validate = box("validate"), low = review.bo + 22;
+  const early = !!flow.record && passed("review") && !passed("retrieve");
+  edge([[validate.l - gap, validate.cy], [validate.l - 16, validate.cy], [validate.l - 16, low], [review.cx, low], [review.cx, review.bo + gap]],
+       early, { early: true, label: "Missing identifiers → direct escalation", at: [(validate.l + review.cx) / 2, low - 7] });
+
+  const marker = (id, color) => `<marker id="arrow-${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9z" fill="${color}"/></marker>`;
+  $("#flow-edges").innerHTML = `<defs>${marker("on", "#4338ca")}${marker("off", "#c3cad8")}</defs>${off.join("")}${on_.join("")}`;
 }
 
 // ------------------------------------------------------------------ replay
 
 function toggleReplay() {
+  if (!state.replay) return;
   const open = $("#replay").hidden;
   if (open) renderReplay(state.replay);
   $("#replay").hidden = !open;
@@ -412,6 +652,18 @@ async function loadVersions() {
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#analyze").addEventListener("click", analyze);
+  $("#retry-replay").addEventListener("click", retryReplay);
+  $("#flow-play").addEventListener("click", playFlow);
+  $("#flow-restart").addEventListener("click", restartFlow);
+  document.querySelectorAll("#flow [data-step]").forEach((node) => node.querySelector("button").addEventListener("click", () => {
+    if (flow.timer) playFlow();
+    selectFlowStep(node.dataset.step);
+  }));
+  new ResizeObserver(drawFlowEdges).observe($("#flow-board"));
+  window.matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => {
+    if (flow.timer) playFlow();
+  });
+  resetFlow();
   $("#claim-json").addEventListener("input", onClaimEdited);
   $("#reset-claim").addEventListener("click", () => state.current && setClaimText(state.current.claim));
   $("#replay-btn").addEventListener("click", toggleReplay);

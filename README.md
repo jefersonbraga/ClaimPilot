@@ -108,7 +108,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       48 behaviour tests
+tests/                       49 behaviour tests + browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 ```
 
@@ -282,8 +282,15 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 48 tests
+pytest                              # 49 tests
 python -m evals.run                 # 21-case evaluation
+```
+
+Optional browser tests for the workbench UI (7 scenarios, Node + Playwright, mock provider, isolated database):
+
+```bash
+npm i --no-save playwright && npx playwright install chromium
+node --test tests/test_ui_browser.cjs
 ```
 
 Real model: one client serves every OpenAI-compatible provider, with ready profiles for **DeepSeek** and **Groq** and a generic profile for OpenAI, Azure OpenAI, gateways or Ollama:
