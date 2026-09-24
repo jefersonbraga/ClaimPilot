@@ -125,3 +125,17 @@ def test_safety_matrix_no_combination_lets_the_model_override_rules():
             assert rules != RuleOutcome.INDETERMINATE
             assert rec == guardrails.EXPECTED_FROM_RULES[rules]
             assert conf >= 0.8 and cites is good and not high_value and not missing
+
+
+def test_citation_may_carry_the_version_but_it_must_be_the_version_in_force(make_investigator, demo_claim):
+    """Some models copy ids as shown in the prompt ("POL-MRI-001 v2.0"). That is accepted only for the exact version
+    that was retrieved; citing a superseded version is a grounding failure."""
+    ok = make_investigator(llm_says("DENY", citations=[{"policy_id": "POL-MRI-001 v2.0", "excerpt": MRI_V2_EXCERPT}])
+                           ).investigate(demo_claim("02_authorization_missing"))
+    assert ok.recommendation == Recommendation.DENY
+    assert [(e.policy_id, e.version) for e in ok.policy_evidence] == [("POL-MRI-001", "2.0")]
+
+    stale = make_investigator(llm_says("DENY", citations=[{"policy_id": "POL-MRI-001@1.0", "excerpt": MRI_V2_EXCERPT}])
+                              ).investigate(demo_claim("02_authorization_missing"))
+    assert stale.recommendation == Recommendation.HUMAN_REVIEW
+    assert any("version in force is v2.0" in r for r in stale.human_review_reasons)

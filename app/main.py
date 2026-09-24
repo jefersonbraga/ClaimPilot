@@ -12,8 +12,8 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.config import DATA_DIR, PROVIDERS, ROOT_DIR, WORKFLOW_VERSION, Settings, get_settings
-from app.llm.client import get_llm
+from app.config import DATA_DIR, PROVIDERS, ROOT_DIR, WORKFLOW_VERSION, Settings, get_settings, local_health_url
+from app.llm.client import endpoint_healthy, get_llm
 from app.limits import UsageGuard
 from app.llm.prompts import PROMPT_VERSION
 from app.models.domain import Claim, ClaimDecision, ExecutionRecord
@@ -79,8 +79,17 @@ def get_investigator() -> ClaimInvestigator:
 def available_providers() -> list[dict]:
     """Providers a caller may pick per analysis: those with a key configured on the server. Default first."""
     default = get_settings().resolved_provider
-    found = [{"id": name, "model": s.llm_model, "default": name == default}
-             for name in PROVIDERS if (s := Settings(llm_provider=name)).llm_api_key]
+    found = []
+    for name in PROVIDERS:
+        s = Settings(llm_provider=name)
+        if name == "local":  # self-hosted: offered only while its server answers the health check
+            url = local_health_url(s)
+            if not (s.llm_base_url and url and endpoint_healthy(url)):
+                continue
+        elif not s.llm_api_key:
+            continue
+        found.append({"id": name, "model": s.llm_model, "default": name == default,
+                      "location": "on-prem" if name == "local" else "cloud"})
     if not found:
         found = [{"id": "mock", "model": "mock-analyst-v1", "default": True}]
     return sorted(found, key=lambda p: not p["default"])

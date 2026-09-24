@@ -29,6 +29,24 @@ class LLMClient(Protocol):
         ...
 
 
+_HEALTH: dict[str, tuple[float, bool]] = {}
+
+
+def endpoint_healthy(url: str, ttl_s: float = 30.0, timeout_s: float = 1.5) -> bool:
+    """Cheap, cached reachability check for optional (self-hosted) model servers."""
+    import httpx
+
+    now = time.monotonic()
+    if (hit := _HEALTH.get(url)) and now - hit[0] < ttl_s:
+        return hit[1]
+    try:
+        ok = httpx.get(url, timeout=timeout_s).status_code == 200
+    except httpx.HTTPError:
+        ok = False
+    _HEALTH[url] = (now, ok)
+    return ok
+
+
 def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
@@ -79,6 +97,7 @@ class OpenAICompatibleLLM:
         self.provider = settings.llm_provider
         self.model = settings.llm_model
         self.max_output_tokens = settings.llm_max_output_tokens
+        self.extra_body = settings.llm_extra_body
         self._client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=settings.llm_timeout_s)
 
     def complete(self, system: str, user: str) -> tuple[str, int, int]:
@@ -86,6 +105,7 @@ class OpenAICompatibleLLM:
             model=self.model,
             temperature=0,
             max_tokens=self.max_output_tokens,  # hard cap on spend per call
+            extra_body=self.extra_body,
             response_format={"type": "json_object"},
             messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         )

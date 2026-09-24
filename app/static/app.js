@@ -32,6 +32,7 @@ const PROVIDER_INFO = {
   deepseek: { name: "DeepSeek", hint: "Default · about 2 s per claim" },
   groq: { name: "Groq", hint: "Alternative · free-tier rate limits can slow it down; a refused call falls back safely to human review" },
   openai: { name: "OpenAI-compatible", hint: "Generic OpenAI-compatible endpoint" },
+  local: { name: "On-prem", hint: "Inside the perimeter · self-hosted model on a private network; no claim data leaves it" },
   mock: { name: "Mock", hint: "Deterministic stand-in: no API key is configured on this server" },
 };
 const currentProvider = () => state.providers.find((p) => p.id === state.provider) || state.providers[0] || null;
@@ -41,6 +42,7 @@ function renderProviders(list) {
   const def = state.providers.find((p) => p.default) || state.providers[0];
   state.provider = def ? def.id : null;
   $("#model-picker").hidden = state.providers.length < 2;
+  $("#model-options").classList.toggle("many", state.providers.length > 2);
   $("#model-options").innerHTML = state.providers.map((p) => `
     <button type="button" role="radio" data-provider="${esc(p.id)}" aria-checked="${p.id === state.provider}">
       <b>${esc((PROVIDER_INFO[p.id] || { name: p.id }).name)}${p.default ? " · default" : ""}</b><span>${esc(p.model)}</span>
@@ -301,6 +303,9 @@ async function analyze() {
     if (e.status === 422 && e.body && Array.isArray(e.body.detail)) {
       showError("The API rejected the claim (422 validation error).",
         e.body.detail.map((d) => `${(d.loc || []).join(".")}: ${d.msg}`).join("\n"));
+    } else if (e.status === 422 && /not available/.test(e.message)) {
+      showError("That model is no longer available (its server stopped answering).", "The model list has been refreshed; pick another model and analyze again.");
+      loadVersions();
     } else if (e.status === 429) {
       showError("Demo usage limit reached.", e.message);
     } else {
@@ -861,12 +866,12 @@ async function loadEvaluation() {
     [pct(head.recommendation_accuracy), "Recommendation accuracy"],
   ];
   const row = (r) => `<tr>
-      <td><code>${esc(r.model)}</code>${r.provider === "mock" ? ' <span class="muted">(mock · CI gate)</span>' : ' <span class="muted">(real model)</span>'}</td>
+      <td><code>${esc(r.model)}</code> <span class="muted">(${r.provider === "mock" ? "mock · CI gate" : r.provider === "local" ? "on-prem · inside the perimeter" : "cloud model"})</span></td>
       <td>${esc(r.cases)}</td><td>${pct(r.recommendation_accuracy)}</td><td>${pct(r.policy_retrieval_rate)}</td>
       <td>${pct(r.grounded_response_rate)}</td><td>${pct(r.correct_escalation_rate)}</td>
       <td class="${r.unsafe_autonomous_actions ? "bad" : "ok"}">${esc(r.unsafe_autonomous_actions)}</td>
       <td>${esc(r.invalid_outputs)}</td><td>${esc(Math.round(r.p50_latency_ms))} / ${esc(Math.round(r.p95_latency_ms))} ms</td>
-      <td>${r.provider === "mock" ? '<span class="muted">—</span>' : `$${Number(r.estimated_average_cost).toFixed(5)}`}</td></tr>`;
+      <td>${r.provider === "mock" ? '<span class="muted">—</span>' : r.provider === "local" ? "$0 marginal" : `$${Number(r.estimated_average_cost).toFixed(5)}`}</td></tr>`;
   $("#eval-sub").innerHTML = `Metrics computed from the audit records of real runs of <code>python -m evals.run</code>, not hardcoded.
     Headline: <code>${esc(head.model)}</code>.`;
   $("#eval").innerHTML = metrics.map(([v, k]) =>

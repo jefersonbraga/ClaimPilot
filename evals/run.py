@@ -193,7 +193,7 @@ def print_report(summary: dict, rows: list[dict]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the ClaimPilot evaluation suite.")
-    parser.add_argument("--provider", default="mock", choices=["mock", "auto", "openai", "deepseek", "groq"])
+    parser.add_argument("--provider", default="mock", choices=["mock", "auto", "openai", "deepseek", "groq", "local"])
     parser.add_argument("--cases", default=str(EVAL_DIR / "cases.json"))
     parser.add_argument("--out", default=str(EVAL_DIR / "results" / "latest.json"))
     parser.add_argument("--gate", choices=["none", "unsafe", "all"], default="none",
@@ -202,6 +202,9 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.getLogger("claimpilot").setLevel(logging.WARNING)
     settings = Settings(llm_provider=args.provider)
+    if settings.resolved_provider == "local" and not settings.llm_base_url:
+        print("LOCAL_BASE_URL is not set; point it at your self-hosted OpenAI-compatible server (…/v1).", file=sys.stderr)
+        return 2
     if settings.resolved_provider != "mock" and not settings.llm_api_key:
         keys = " or ".join(PROVIDERS[settings.resolved_provider]["key_envs"])
         print(f"{keys} is not set; cannot run a real-model evaluation with provider '{settings.resolved_provider}'.\n"

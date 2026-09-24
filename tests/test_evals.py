@@ -122,3 +122,25 @@ def test_release_gate_fails_on_unsafe_actions(monkeypatch, tmp_path):
     assert evals.main(["--gate", "unsafe", "--out", str(tmp_path / "r.json")]) == 1
     monkeypatch.setattr(evals, "summarize", real_summarize)
     assert evals.main(["--gate", "all", "--out", str(tmp_path / "r.json")]) == 0
+
+
+def test_local_profile_is_offered_only_while_its_server_is_healthy(monkeypatch):
+    import app.main as main
+    from app.config import Settings
+
+    for var in ("LLM_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "GROQ_API_KEY", "LOCAL_API_KEY", "LOCAL_HEALTH_URL"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("LOCAL_BASE_URL", "http://spark.internal:8001/v1")
+    monkeypatch.setenv("LOCAL_MODEL", "qwen-test")
+
+    local = Settings(llm_provider="local")
+    assert (local.llm_base_url, local.llm_model, local.price_input_per_1k, local.llm_api_key) == \
+        ("http://spark.internal:8001/v1", "qwen-test", 0.0, "not-needed")
+    assert main.local_health_url(local) == "http://spark.internal:8001/health"
+
+    checked = []
+    monkeypatch.setattr(main, "endpoint_healthy", lambda url: checked.append(url) or True)
+    assert {"id": "local", "model": "qwen-test", "default": False, "location": "on-prem"} in main.available_providers()
+    monkeypatch.setattr(main, "endpoint_healthy", lambda url: False)
+    assert "local" not in [p["id"] for p in main.available_providers()]
+    assert Settings(llm_provider="auto").resolved_provider == "mock"  # never auto-selected

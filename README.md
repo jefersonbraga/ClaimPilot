@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       58 behaviour tests + 9 browser tests for the UI
+tests/                       60 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -174,7 +174,7 @@ The **workbench UI** at `/` is plain HTML, CSS and JavaScript served by the same
 - **live progress while the analysis runs**: each step lights up as the backend completes the matching LangGraph node (streamed from the API, not a simulated animation), then the recorded path
 - which workflow steps actually ran
 - a before/after comparison when the same claim is re-analyzed
-- **model choice per analysis** (DeepSeek by default, Groq as the alternative): re-run the same claim on the other model and the comparison shows the recommendation, latency and cost side by side, with the same rules and guardrails throughout
+- **model choice per analysis** (DeepSeek by default, Groq as the alternative, and **On-prem** when a self-hosted model is reachable): re-run the same claim on the other model and the comparison shows the recommendation, latency and cost side by side, with the same rules and guardrails throughout
 - **your execution history**: every analysis from this browser, reopenable into the workbench, with a shareable link per decision
 - the latest evaluation snapshot
 
@@ -194,24 +194,25 @@ The cases cover:
 - inactive and unknown members
 - incomplete claims
 
-Same 21 cases, same workflow, three providers:
+Same 21 cases, same workflow, four models: two cloud, one **self-hosted inside the perimeter**, and the mock:
 
-| | Mock (CI gate) | **DeepSeek `deepseek-flash`** | **Groq `openai/gpt-oss-120b`** |
-|---|---|---|---|
-| Recommendation accuracy | 100% | **100%** | **100%** |
-| Correct policy retrieval | 100% | **100%** | **100%** |
-| Grounded responses | 100% | **100%** | **100%** |
-| Correct escalation | 100% | **100%** | **100%** |
-| **Unsafe autonomous actions** | **0** | **0** | **0** |
-| Invalid structured outputs | 0 | 0 | 0 |
-| Human review rate | 43% | 43% | 43% |
-| Latency p50 / p95 | 0.9 / 1.0 ms | 2.02 / 2.69 s | 9.75 / 12.57 s ¹ |
-| Avg tokens in / out | 936 / 183 (estimated) | 979 / 371 | 998 / 408 |
-| Estimated cost per claim | n/a | **$0.00074** | **$0.00046** |
+| | Mock (CI gate) | **DeepSeek `deepseek-flash`** | **Groq `openai/gpt-oss-120b`** | **On-prem `Qwen3.6-35B-A3B` (DGX Spark)** |
+|---|---|---|---|---|
+| Recommendation accuracy | 100% | **100%** | **100%** | **100%** |
+| Correct policy retrieval | 100% | **100%** | **100%** | **100%** |
+| Grounded responses | 100% | **100%** | **100%** | **100%** |
+| Correct escalation | 100% | **100%** | **100%** | **100%** |
+| **Unsafe autonomous actions** | **0** | **0** | **0** | **0** |
+| Invalid structured outputs | 0 | 0 | 0 | 0 |
+| Latency p50 / p95 | 0.9 / 1.0 ms | 2.02 / 2.69 s | 9.75 / 12.57 s ¹ | 2.92 / 3.69 s |
+| Avg tokens in / out | 936 / 183 (estimated) | 979 / 371 | 998 / 408 | 1003 / 216 |
+| Cost per claim | n/a | **$0.00074** | **$0.00046** | **$0 marginal** ² |
 
 ¹ Single calls to Groq took 1.1–1.4 s. The suite ran 21 calls back to back on a free-tier key, and the higher figure reflects rate-limit backoff in the client's retries rather than model speed. For production latency you would measure on a paid tier.
 
-Both real-model runs are committed, with summary and per-case rows including the model's reasoning summaries: [`evals/reference/deepseek-flash.json`](evals/reference/deepseek-flash.json) and [`evals/reference/groq-gpt-oss-120b.json`](evals/reference/groq-gpt-oss-120b.json). Two different model families produced identical decisions on every case, because the deterministic layer fixes the facts and the guardrails bound what the model can change. Costs use each provider's list prices from `app/config.py`.
+² Self-hosted: no per-token charge; the cost is the hardware you already run. Claims never leave your network.
+
+All real-model runs are committed, with summary and per-case rows including the model's reasoning summaries: [`deepseek-flash`](evals/reference/deepseek-flash.json), [`groq-gpt-oss-120b`](evals/reference/groq-gpt-oss-120b.json) and [`onprem-qwen3.6-35b-a3b`](evals/reference/onprem-qwen3.6-35b-a3b.json). Three different model families, cloud and on-prem, produced identical decisions on every case, because the deterministic layer fixes the facts and the guardrails bound what the model can change. Costs use each provider's list prices from `app/config.py`.
 
 Every run also writes `evals/results/latest.json`. When a case fails a check, the console prints its diagnostics:
 - expected vs. actual recommendation
@@ -277,10 +278,19 @@ The relevance floor came from the second iteration. Without it, the second pass 
 - a check that every obligation in the policy text has a matching encoded rule (an LLM-assisted policy-to-rule diff, reviewed by a person);
 - versioning the rule encoding separately from the policy prose. Here the prose stayed at v1.0 and only the rule changed.
 
+### Finding 3: a self-hosted model needed two integration fixes, and neither was about accuracy
+
+Running the suite against Qwen3.6-35B-A3B served by vLLM on a DGX Spark surfaced two issues that cloud models had hidden:
+
+1. **Reasoning mode ate the output budget.** Qwen3 "thinks" before answering by default. Each call spent its 600-token cap on reasoning and returned no JSON. The guardrail did its job: invalid output fell back to human review, with 0 unsafe actions. The fix turns thinking off for this profile (`chat_template_kwargs.enable_thinking=false`, overridable with `LOCAL_ENABLE_THINKING`). The rules already did the heavy lifting, and latency dropped to about 3 s.
+2. **Citation format drift.** The first complete run scored **90% accuracy and 81% grounded**. Every grounding failure had the same cause: Qwen wrote citations as `POL-MRI-001 v2.0`, copying how the prompt presents policies, instead of the bare id. The grounding check now parses an optional version and **requires it to be the version in force**, so citing a superseded `v1.0` is rejected. That makes the check stricter, not looser. The prompt is unchanged, so the cloud runs stay comparable. The rerun scored **100%**.
+
+The lesson for deploying into a customer's environment: model swaps break at the integration seams (serving defaults, output conventions) before they break on reasoning quality. The evaluation harness found both issues in minutes, and the guardrails kept every intermediate failure safe.
+
 **Still open** (see [Trade-offs](#trade-offs)):
 - 21 cases is a smoke test, not a benchmark. The next step is a larger, analyst-labelled set, and repeated runs to measure variance.
 - TF-IDF will not scale to a real policy corpus.
-- Two real models have been evaluated, each run once. Repeated runs would measure run-to-run variance.
+- Three real models have been evaluated (two cloud, one on-prem), each run once. Repeated runs would measure run-to-run variance.
 
 ---
 
@@ -293,7 +303,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 58 tests
+pytest                              # 60 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
@@ -316,6 +326,7 @@ python -m evals.run --provider deepseek     # or: groq | openai
 |---|---|---|---|
 | `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` | `deepseek-flash` |
 | `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` |
+| `local` (on-prem) | `LOCAL_API_KEY` (optional) | `LOCAL_BASE_URL` | `LOCAL_MODEL` · offered only while healthy |
 | `openai` (generic) | `LLM_API_KEY` / `OPENAI_API_KEY` | `LLM_BASE_URL` (optional) | `LLM_MODEL` |
 | `auto` (default) | first key found | | falls back to `mock` |
 
@@ -328,6 +339,20 @@ docker compose up --build           # reads .env if present
 curl localhost:8000/health
 docker compose run --rm claimpilot python -m pytest -p no:cacheprovider
 ```
+
+### Running inside the boundary (self-hosted model)
+
+In healthcare, the model often has to run where the data lives. The `local` profile points the same container at any self-hosted OpenAI-compatible server (vLLM, NIM, Ollama…) on your own network, for example a DGX Spark reached over a private tailnet:
+
+```bash
+LOCAL_BASE_URL=http://my-spark:8000/v1      # in .env; never committed
+LOCAL_MODEL=nvidia/Qwen3.6-35B-A3B-NVFP4
+LOCAL_API_KEY=...                           # if the server requires one
+```
+
+- **Health-gated.** The UI offers **On-prem** only while `<base>/health` answers (1.5 s timeout, 30 s cache). It is never auto-selected. If the server goes away mid-session, the model list refreshes.
+- **Same workflow, rules and guardrails.** Only the model endpoint changes. No claim data leaves the network, and marginal model cost is zero.
+- **Not on the public demo, on purpose.** The hosted deployment cannot reach a private network. Bridging it (a tagged, ACL-restricted Tailscale node in the container) is possible but was left out to keep the public demo simple and the private hardware private.
 
 ### Exposing the demo publicly with a real key
 

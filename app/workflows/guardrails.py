@@ -51,14 +51,27 @@ def findings(tool_results: list[ToolResult]) -> list[ToolResult]:
             if t.outcome != RuleOutcome.PASS or any(t.tool == tool and t.data.get(flag) for tool, flag in RISK_SIGNALS)]
 
 
+_CITED_ID = re.compile(r"^\s*(?P<id>[A-Z]+-[A-Z0-9]+-\d+)\s*(?:(?:@|\s)v?(?P<version>\d+(?:\.\d+)*))?\s*$")
+
+
+def _parse_cited_id(raw: str) -> tuple[str, str | None]:
+    """Models write ids as they appear in the prompt ("POL-MRI-001 v2.0") or bare ("POL-MRI-001")."""
+    m = _CITED_ID.match(raw)
+    return (m.group("id"), m.group("version")) if m else (raw.strip(), None)
+
+
 def ground_citations(analysis: LLMAnalysis, retrieved: list[RetrievedPolicy]) -> tuple[list[PolicyEvidence], list[str]]:
-    """A citation is grounded only if it names a retrieved policy AND its excerpt appears verbatim in that policy."""
+    """A citation is grounded only if it names a retrieved policy (and, when a version is cited, that exact version)
+    AND its excerpt appears verbatim in that policy."""
     by_id = {p.policy_id: p for p in retrieved}
     grounded, problems = [], []
     for c in analysis.citations:
-        policy = by_id.get(c.policy_id)
+        cited_id, cited_version = _parse_cited_id(c.policy_id)
+        policy = by_id.get(cited_id)
         if policy is None:
             problems.append(f"cited {c.policy_id}, which was not in the retrieved evidence")
+        elif cited_version is not None and cited_version != policy.version:
+            problems.append(f"cited {cited_id} v{cited_version}, but the version in force is v{policy.version}")
         elif len(_norm(c.excerpt).split()) < MIN_EXCERPT_WORDS:
             problems.append(f"excerpt attributed to {c.policy_id} is too short to verify (< {MIN_EXCERPT_WORDS} words)")
         elif _norm(c.excerpt) not in _norm(policy.content):
