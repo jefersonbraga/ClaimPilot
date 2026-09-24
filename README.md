@@ -186,22 +186,24 @@ The cases cover:
 - inactive and unknown members
 - incomplete claims
 
-Same 21 cases, same workflow, two providers:
+Same 21 cases, same workflow, three providers:
 
-| | Mock (CI gate) | **DeepSeek `deepseek-flash`** (real model) |
-|---|---|---|
-| Recommendation accuracy | 100% | **100%** |
-| Correct policy retrieval | 100% | **100%** |
-| Grounded responses | 100% | **100%** |
-| Correct escalation | 100% | **100%** |
-| **Unsafe autonomous actions** | **0** | **0** |
-| Invalid structured outputs | 0 | 0 |
-| Human review rate | 43% | 43% |
-| Latency p50 / p95 | 0.9 / 1.0 ms | 2.02 / 2.69 s |
-| Avg tokens in / out | 936 / 183 (estimated) | 979 / 371 |
-| Estimated cost per claim | n/a | **$0.00074** |
+| | Mock (CI gate) | **DeepSeek `deepseek-flash`** | **Groq `openai/gpt-oss-120b`** |
+|---|---|---|---|
+| Recommendation accuracy | 100% | **100%** | **100%** |
+| Correct policy retrieval | 100% | **100%** | **100%** |
+| Grounded responses | 100% | **100%** | **100%** |
+| Correct escalation | 100% | **100%** | **100%** |
+| **Unsafe autonomous actions** | **0** | **0** | **0** |
+| Invalid structured outputs | 0 | 0 | 0 |
+| Human review rate | 43% | 43% | 43% |
+| Latency p50 / p95 | 0.9 / 1.0 ms | 2.02 / 2.69 s | 9.75 / 12.57 s ¹ |
+| Avg tokens in / out | 936 / 183 (estimated) | 979 / 371 | 998 / 408 |
+| Estimated cost per claim | n/a | **$0.00074** | **$0.00046** |
 
-The real-model run is committed at [`evals/reference/deepseek-flash.json`](evals/reference/deepseek-flash.json): summary plus per-case rows with the model's reasoning summaries. Prices are DeepSeek's peak-hour list prices, set in `.env`.
+¹ Single calls to Groq took 1.1–1.4 s. The suite ran 21 calls back to back on a free-tier key, and the higher figure reflects rate-limit backoff in the client's retries rather than model speed. For production latency you would measure on a paid tier.
+
+Both real-model runs are committed, with summary and per-case rows including the model's reasoning summaries: [`evals/reference/deepseek-flash.json`](evals/reference/deepseek-flash.json) and [`evals/reference/groq-gpt-oss-120b.json`](evals/reference/groq-gpt-oss-120b.json). Two different model families produced identical decisions on every case, because the deterministic layer fixes the facts and the guardrails bound what the model can change. Costs use each provider's list prices from `app/config.py`.
 
 Every run also writes `evals/results/latest.json`. When a case fails a check, the console prints its diagnostics:
 - expected vs. actual recommendation
@@ -215,7 +217,7 @@ Every run also writes `evals/results/latest.json`. When a case fails a check, th
 
 - **Mock vs. real.** `MockLLM` is a deterministic stand-in: it proves routing, grounding, escalation, retrieval and audit behave correctly, and it gates CI without a key. The real-model run measures what the mock cannot: whether a model interprets policy text, cites it verbatim and stays inside the guardrails. It also gives real latency and cost.
 - **Unsafe autonomous actions** counts autonomous APPROVE/DENY decisions that were wrong, or that should have been escalated. It is the metric that would gate a rollout.
-- **Model choice.** The workflow is model-agnostic: any OpenAI-compatible endpoint works, and the real run used DeepSeek because that key was available. For a US healthcare deployment the model would sit behind a BAA-covered or in-boundary gateway (e.g. Azure OpenAI); the data here is synthetic, so no PHI left the machine.
+- **Model choice.** The workflow is model-agnostic: any OpenAI-compatible endpoint works, and the real runs used DeepSeek and Groq. For a US healthcare deployment the model would sit behind a BAA-covered or in-boundary gateway (e.g. Azure OpenAI); the data here is synthetic, so no PHI left the machine.
 - **Accidental outage test.** One run was misconfigured with a model name the provider rejected. All 21 cases went to human review with the provider error in the replay, and there were 0 unsafe actions. That is the fallback path working as designed.
 
 Metric definitions:
@@ -270,7 +272,7 @@ The relevance floor came from the second iteration. Without it, the second pass 
 **Still open** (see [Trade-offs](#trade-offs)):
 - 21 cases is a smoke test, not a benchmark. The next step is a larger, analyst-labelled set, and repeated runs to measure variance.
 - TF-IDF will not scale to a real policy corpus.
-- One real model has been evaluated. Comparing a second provider would show sensitivity to model choice.
+- Two real models have been evaluated, each run once. Repeated runs would measure run-to-run variance.
 
 ---
 
@@ -305,7 +307,7 @@ python -m evals.run --provider deepseek     # or: groq | openai
 | `LLM_PROVIDER` | Key | Base URL | Default model |
 |---|---|---|---|
 | `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` | `deepseek-flash` |
-| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` |
 | `openai` (generic) | `LLM_API_KEY` / `OPENAI_API_KEY` | `LLM_BASE_URL` (optional) | `LLM_MODEL` |
 | `auto` (default) | first key found | | falls back to `mock` |
 

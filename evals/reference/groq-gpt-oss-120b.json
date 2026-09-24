@@ -1,0 +1,1101 @@
+{
+  "timestamp": "2026-09-24T01:14:08.908985+00:00",
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "cases": 21,
+  "recommendation_accuracy": 1.0,
+  "policy_retrieval_rate": 1.0,
+  "grounded_response_rate": 1.0,
+  "correct_escalation_rate": 1.0,
+  "unsafe_autonomous_actions": 0,
+  "invalid_outputs": 0,
+  "human_review_rate": 0.42857142857142855,
+  "llm_calls": 21,
+  "average_latency_ms": 7701.45,
+  "p50_latency_ms": 9746.87,
+  "p95_latency_ms": 12571.23,
+  "average_llm_latency_ms": 7690.45,
+  "average_input_tokens": 998.5,
+  "average_output_tokens": 408.5,
+  "estimated_average_cost": 0.000456,
+  "cases_needing_attention": [],
+  "results": [
+    {
+      "case_id": "routine-lab",
+      "description": "Routine lab, active member",
+      "execution_id": "EXE-0b6edf536503",
+      "expected": "APPROVE",
+      "actual": "APPROVE",
+      "correct": true,
+      "expected_policies": [
+        "POL-LAB-009"
+      ],
+      "retrieved_policies": [
+        "POL-LAB-009",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "LOW",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "APPROVE",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-07-14 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 Procedure does not require prior authorization.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $62.00 is below the high-value threshold."
+      ],
+      "notable_tools": [],
+      "review_reasons": [],
+      "reasoning_summary": "The member had active coverage on the service date and the claim matches the enrolled plan. The lab lipid panel does not require prior authorization and the billed amount is below the high\u2011value threshold. All tool checks passed and the rule engine verdict is PASS.",
+      "latency_ms": 1270.76,
+      "llm_latency_ms": 1266.61,
+      "input_tokens": 969,
+      "output_tokens": 413,
+      "cost": 0.000455
+    },
+    {
+      "case_id": "mri-below-threshold",
+      "description": "Knee MRI below the 2026 PA threshold",
+      "execution_id": "EXE-e0ba3a3062fd",
+      "expected": "APPROVE",
+      "actual": "APPROVE",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "LOW",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "APPROVE",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-01 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 Billed amount $1,200.00 is within the prior authorization threshold.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,200.00 is below the high-value threshold."
+      ],
+      "notable_tools": [],
+      "review_reasons": [],
+      "reasoning_summary": "The member is active on the service date and the plan matches, the billed amount is below the $1,500 prior\u2011authorization threshold for knee MRI under GOLD_PPO, and it is also below the $10,000 high\u2011value threshold. All tool checks passed and the rule engine verdict is PASS, so the claim can be approved.",
+      "latency_ms": 1461.8,
+      "llm_latency_ms": 1457.89,
+      "input_tokens": 1003,
+      "output_tokens": 419,
+      "cost": 0.000465
+    },
+    {
+      "case_id": "mri-pa-missing",
+      "description": "Knee MRI above threshold, no PA, not an emergency",
+      "execution_id": "EXE-53aa3a382ccd",
+      "expected": "DENY",
+      "actual": "DENY",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "FAIL",
+      "llm_recommendation": "DENY",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-03 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for prior_authorization does not apply.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for prior_authorization does not apply."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The claim exceeds the $1,500 threshold for knee MRI under GOLD_PPO, so prior authorization is required but not provided. The emergency exemption does not apply because the claim is not marked as an emergency. Consequently, the claim fails the prior\u2011authorization check and must be denied.",
+      "latency_ms": 933.09,
+      "llm_latency_ms": 928.42,
+      "input_tokens": 1051,
+      "output_tokens": 297,
+      "cost": 0.00038
+    },
+    {
+      "case_id": "mri-emergency-unknown",
+      "description": "WOW case: PA missing, emergency exemption exists, emergency status unknown",
+      "execution_id": "EXE-4b1dd3967a13",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.95,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "emergency_indicator"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-09-10 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: INDETERMINATE \u2014 An emergency exemption may waive prior_authorization, but the claim's emergency status is unknown.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: INDETERMINATE \u2014 An emergency exemption may waive prior_authorization, but the claim's emergency status is unknown."
+      ],
+      "review_reasons": [
+        "Required information is missing: emergency_indicator.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim."
+      ],
+      "reasoning_summary": "The claim exceeds the $1,500 threshold and lacks prior authorization, triggering a FAIL. An emergency exemption could waive this requirement, but the emergency_indicator is missing, making the exemption status indeterminate. Human review is required to resolve the missing emergency information.",
+      "latency_ms": 1118.03,
+      "llm_latency_ms": 1112.41,
+      "input_tokens": 1059,
+      "output_tokens": 441,
+      "cost": 0.00049
+    },
+    {
+      "case_id": "mri-emergency-confirmed",
+      "description": "WOW case after the analyst confirms the emergency and the retro-authorization request",
+      "execution_id": "EXE-20c445874dc0",
+      "expected": "APPROVE",
+      "actual": "APPROVE",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.97,
+      "risk_level": "LOW",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "APPROVE",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-09-10 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: PASS \u2014 Emergency documented and retrospective authorization requested within 72h; prior_authorization is waived.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The claim meets eligibility and network criteria, and although prior authorization is normally required for amounts over $1,500, the documented emergency and timely retrospective authorization waive that requirement per policy. The rule engine verdict is PASS, so the claim can be approved.",
+      "latency_ms": 1179.61,
+      "llm_latency_ms": 1174.25,
+      "input_tokens": 1049,
+      "output_tokens": 476,
+      "cost": 0.000514
+    },
+    {
+      "case_id": "mri-emergency-retro-auth-unknown",
+      "description": "Emergency confirmed, but no evidence the 72h retro-authorization was requested",
+      "execution_id": "EXE-62cc36f00667",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.92,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "retro_auth_requested"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-09-10 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: INDETERMINATE \u2014 Emergency documented, but the exemption also requires a retrospective authorization request within 72h and the claim does not say whether one was made.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: INDETERMINATE \u2014 Emergency documented, but the exemption also requires a retrospective authorization request within 72h and the claim does not say whether one was made."
+      ],
+      "review_reasons": [
+        "Required information is missing: retro_auth_requested.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim."
+      ],
+      "reasoning_summary": "The claim exceeds the $1,500 threshold, so prior authorization is required per policy, and none is on file. An emergency exemption could apply, but the required retrospective authorization within 72\u202fhours is not documented, making the exemption status indeterminate. Human review is needed to verify the emergency exemption.",
+      "latency_ms": 1029.42,
+      "llm_latency_ms": 1024.26,
+      "input_tokens": 1069,
+      "output_tokens": 397,
+      "cost": 0.000458
+    },
+    {
+      "case_id": "mri-2025-v1-threshold",
+      "description": "2025 date of service: v1 threshold ($2,000) applies",
+      "execution_id": "EXE-6f9bcc178f6a",
+      "expected": "APPROVE",
+      "actual": "APPROVE",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "LOW",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "APPROVE",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2025-10-01 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 Billed amount $1,840.00 is within the prior authorization threshold.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [],
+      "review_reasons": [],
+      "reasoning_summary": "The member was active on the service date and the plan matches, the billed amount is below the $2,000 prior\u2011authorization threshold for knee MRI under GOLD_PPO, and it is also below the $10,000 high\u2011value claim threshold. All tool checks passed and the rule engine verdict is PASS, so the claim can be approved.",
+      "latency_ms": 9940.58,
+      "llm_latency_ms": 9930.31,
+      "input_tokens": 1003,
+      "output_tokens": 421,
+      "cost": 0.000466
+    },
+    {
+      "case_id": "mri-2025-over-v1",
+      "description": "2025 date of service above the v1 threshold, no PA",
+      "execution_id": "EXE-e95095c48002",
+      "expected": "DENY",
+      "actual": "DENY",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "FAIL",
+      "llm_recommendation": "DENY",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2025-10-01 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $2,400.00 and none is on file.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for prior_authorization does not apply.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $2,400.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $2,400.00 and none is on file.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for prior_authorization does not apply."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The claim exceeds the $2,000 threshold for knee MRI under GOLD_PPO, triggering a prior\u2011authorization requirement per POL\u2011MRI\u2011001, but no authorization is present. The emergency exemption does not apply because the claim lacks an emergency indicator per POL\u2011EMRG\u2011002. All other checks pass, but the prior\u2011authorization failure mandates denial.",
+      "latency_ms": 10522.46,
+      "llm_latency_ms": 10497.34,
+      "input_tokens": 1051,
+      "output_tokens": 452,
+      "cost": 0.000497
+    },
+    {
+      "case_id": "mri-possible-duplicate",
+      "description": "Valid PA but same procedure paid 11 days earlier",
+      "execution_id": "EXE-838b6b623e8e",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-DUP-006"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-ELIG-003",
+        "POL-DUP-006"
+      ],
+      "supplemental_policies": [
+        "POL-DUP-006"
+      ],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.95,
+      "risk_level": "HIGH",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-07-01 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 Possible duplicate of CLM-80001 (same procedure within 30 days).",
+        "check_prior_authorization: PASS \u2014 Prior authorization required and valid authorization PA-55001 is on file.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,790.00 is below the high-value threshold."
+      ],
+      "notable_tools": [],
+      "review_reasons": [
+        "HIGH risk: Possible duplicate of CLM-80001.",
+        "The model requested human review (a more conservative outcome is always honored)."
+      ],
+      "reasoning_summary": "The claim meets eligibility, prior authorization, network, and financial thresholds, but it is flagged as a potential duplicate within 30 days, which policy requires human analyst review before payment.",
+      "latency_ms": 10574.6,
+      "llm_latency_ms": 10552.1,
+      "input_tokens": 927,
+      "output_tokens": 524,
+      "cost": 0.000532
+    },
+    {
+      "case_id": "mri-valid-pa",
+      "description": "Valid PA on file, outside the duplicate window",
+      "execution_id": "EXE-852a7477fc09",
+      "expected": "APPROVE",
+      "actual": "APPROVE",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-ELIG-003"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.98,
+      "risk_level": "LOW",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "APPROVE",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-25 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 Prior authorization required and valid authorization PA-55001 is on file.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,790.00 is below the high-value threshold."
+      ],
+      "notable_tools": [],
+      "review_reasons": [],
+      "reasoning_summary": "The member is active on the service date and the plan matches. The billed amount exceeds $1,500, and a valid prior authorization is on file. All tool checks passed and the rule engine verdict is PASS.",
+      "latency_ms": 10033.63,
+      "llm_latency_ms": 10020.97,
+      "input_tokens": 872,
+      "output_tokens": 315,
+      "cost": 0.000367
+    },
+    {
+      "case_id": "pa-claimed-not-on-file",
+      "description": "Claim says PA obtained but no record exists",
+      "execution_id": "EXE-57a69fc97dc6",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-ELIG-003",
+        "POL-EMRG-002"
+      ],
+      "supplemental_policies": [
+        "POL-EMRG-002"
+      ],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.9,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "prior_authorization_record"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-12 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: INDETERMINATE \u2014 Claim states prior authorization was obtained, but no valid authorization is on file.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: INDETERMINATE \u2014 Claim states prior authorization was obtained, but no valid authorization is on file."
+      ],
+      "review_reasons": [
+        "Required information is missing: prior_authorization_record.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim."
+      ],
+      "reasoning_summary": "Knee MRI over $1,500 requires a valid prior authorization, but the system could not locate the authorization record. No emergency exemption applies, and eligibility checks passed, so the missing authorization evidence requires human review.",
+      "latency_ms": 9313.59,
+      "llm_latency_ms": 9305.62,
+      "input_tokens": 954,
+      "output_tokens": 369,
+      "cost": 0.00042
+    },
+    {
+      "case_id": "regional-policy-conflict",
+      "description": "Regional addendum and national policy disagree",
+      "execution_id": "EXE-148625063348",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001",
+        "POL-IMG-010"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-IMG-010",
+        "POL-EMRG-002",
+        "POL-ELIG-003"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.9,
+      "risk_level": "HIGH",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "region"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-06-11 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 0 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: INDETERMINATE \u2014 Applicable policies disagree on whether prior authorization is required: POL-IMG-010@1.0 (threshold $1,000) -> required, POL-MRI-001@2.0 (threshold $1,500) -> not required",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,250.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: INDETERMINATE \u2014 Applicable policies disagree on whether prior authorization is required: POL-IMG-010@1.0 (threshold $1,000) -> required, POL-MRI-001@2.0 (threshold $1,500) -> not required"
+      ],
+      "review_reasons": [
+        "Required information is missing: region.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim.",
+        "check_prior_authorization could not reach a deterministic result: Applicable policies disagree on whether prior authorization is required: POL-IMG-010@1.0 (threshold $1,000) -> required, POL-MRI-001@2.0 (threshold $1,500) -> not required",
+        "HIGH risk: Conflicting policy evidence on prior authorization requirement."
+      ],
+      "reasoning_summary": "The claim\u2019s prior\u2011authorization requirement is unclear because the regional addendum (POL-IMG-010) applies only to members in the NORTHEAST region, but the claim\u2019s region is not provided. Without the region, we cannot determine which threshold ($1,000 vs $1,500) governs the $1,250 charge. All other checks passed, so a human must verify the member\u2019s region to resolve the conflict.",
+      "latency_ms": 12571.23,
+      "llm_latency_ms": 12557.39,
+      "input_tokens": 1061,
+      "output_tokens": 465,
+      "cost": 0.000508
+    },
+    {
+      "case_id": "regional-policies-agree",
+      "description": "Both regional and national policy require PA; none on file",
+      "execution_id": "EXE-512ea5471453",
+      "expected": "DENY",
+      "actual": "DENY",
+      "correct": true,
+      "expected_policies": [
+        "POL-MRI-001",
+        "POL-IMG-010"
+      ],
+      "retrieved_policies": [
+        "POL-MRI-001",
+        "POL-IMG-010",
+        "POL-EMRG-002",
+        "POL-ELIG-003"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.98,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "FAIL",
+      "llm_recommendation": "DENY",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-06-11 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 0 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for prior_authorization does not apply.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $1,840.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_prior_authorization: FAIL \u2014 Prior authorization required for billed amount $1,840.00 and none is on file.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for prior_authorization does not apply."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The claim exceeds the $1,500 national threshold for knee MRI prior authorization under POL-MRI-001 and also exceeds the $1,000 regional threshold under POL-IMG-010. No prior authorization is on file and the claim is not marked as an emergency, so the emergency exemption does not apply, resulting in a FAIL verdict.",
+      "latency_ms": 9746.87,
+      "llm_latency_ms": 9732.63,
+      "input_tokens": 1069,
+      "output_tokens": 450,
+      "cost": 0.000498
+    },
+    {
+      "case_id": "high-value-surgery",
+      "description": "High-value claim must go to a human",
+      "execution_id": "EXE-1beb3784f92b",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-FIN-004"
+      ],
+      "retrieved_policies": [
+        "POL-FIN-004",
+        "POL-ELIG-003",
+        "POL-DUP-006"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.95,
+      "risk_level": "HIGH",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-07-22 under GOLD_PPO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 No prior authorization rule applies to this procedure/plan.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $14,500.00 exceeds the high-value threshold of $10,000."
+      ],
+      "notable_tools": [],
+      "review_reasons": [
+        "HIGH risk: High-value claim (above financial review threshold).",
+        "The model requested human review (a more conservative outcome is always honored)."
+      ],
+      "reasoning_summary": "The claim amount exceeds $10,000, classifying it as a high-value claim which must be reviewed by a human analyst before any payment. Although all eligibility and duplicate checks passed, policy prohibits automated approval of such claims.",
+      "latency_ms": 9074.98,
+      "llm_latency_ms": 9061.0,
+      "input_tokens": 910,
+      "output_tokens": 344,
+      "cost": 0.000394
+    },
+    {
+      "case_id": "inactive-member",
+      "description": "Coverage terminated before date of service",
+      "execution_id": "EXE-47cec3f9f74f",
+      "expected": "DENY",
+      "actual": "DENY",
+      "correct": true,
+      "expected_policies": [
+        "POL-ELIG-003"
+      ],
+      "retrieved_policies": [
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-LAB-009",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "FAIL",
+      "llm_recommendation": "DENY",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: FAIL \u2014 Member coverage not active on 2026-05-01 (coverage end 2026-03-31).",
+        "get_claim_history: PASS \u2014 0 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 Procedure does not require prior authorization.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $45.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_member_eligibility: FAIL \u2014 Member coverage not active on 2026-05-01 (coverage end 2026-03-31)."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The member did not have active coverage on the date of service, violating the eligibility requirement. No emergency exemption applies, and all other criteria are met, so the claim must be denied.",
+      "latency_ms": 10321.78,
+      "llm_latency_ms": 10312.3,
+      "input_tokens": 975,
+      "output_tokens": 381,
+      "cost": 0.000432
+    },
+    {
+      "case_id": "pt-within-limit",
+      "description": "PT visit within the annual limit",
+      "execution_id": "EXE-05cf87d8b7bf",
+      "expected": "APPROVE",
+      "actual": "APPROVE",
+      "correct": true,
+      "expected_policies": [
+        "POL-PT-007"
+      ],
+      "retrieved_policies": [
+        "POL-PT-007",
+        "POL-NET-008",
+        "POL-EMRG-002",
+        "POL-ELIG-003"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.98,
+      "risk_level": "LOW",
+      "deterministic_outcome": "PASS",
+      "llm_recommendation": "APPROVE",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-19 under SILVER_HMO.",
+        "get_claim_history: PASS \u2014 6/20 visits used in 2026.",
+        "check_prior_authorization: PASS \u2014 No prior authorization rule applies to this procedure/plan.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $140.00 is below the high-value threshold."
+      ],
+      "notable_tools": [],
+      "review_reasons": [],
+      "reasoning_summary": "The member is active on the service date, the claim is in\u2011network, and only 6 of the allowed 20 physical therapy visits have been used, so all policy conditions are met and the rule engine returned PASS.",
+      "latency_ms": 10640.68,
+      "llm_latency_ms": 10630.22,
+      "input_tokens": 973,
+      "output_tokens": 476,
+      "cost": 0.000503
+    },
+    {
+      "case_id": "pt-limit-exhausted",
+      "description": "PT visit after the annual limit is exhausted",
+      "execution_id": "EXE-5fb398dbcb36",
+      "expected": "DENY",
+      "actual": "DENY",
+      "correct": true,
+      "expected_policies": [
+        "POL-PT-007"
+      ],
+      "retrieved_policies": [
+        "POL-PT-007",
+        "POL-NET-008",
+        "POL-EMRG-002",
+        "POL-ELIG-003"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "FAIL",
+      "llm_recommendation": "DENY",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-19 under SILVER_HMO.",
+        "get_claim_history: FAIL \u2014 Annual limit reached: 20/20 visits used in 2026.",
+        "check_prior_authorization: PASS \u2014 No prior authorization rule applies to this procedure/plan.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $140.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "get_claim_history: FAIL \u2014 Annual limit reached: 20/20 visits used in 2026."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The claim exceeds the annual physical therapy visit limit of 20 for SILVER_HMO, which is a non\u2011coverable condition per policy. No emergency or other exemption applies, and the rule engine verdict is FAIL.",
+      "latency_ms": 10017.16,
+      "llm_latency_ms": 10009.54,
+      "input_tokens": 977,
+      "output_tokens": 299,
+      "cost": 0.000371
+    },
+    {
+      "case_id": "hmo-out-of-network",
+      "description": "HMO member, out-of-network provider, not an emergency",
+      "execution_id": "EXE-fda60638701d",
+      "expected": "DENY",
+      "actual": "DENY",
+      "correct": true,
+      "expected_policies": [
+        "POL-NET-008"
+      ],
+      "retrieved_policies": [
+        "POL-NET-008",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": false,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.99,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "FAIL",
+      "llm_recommendation": "DENY",
+      "llm_error": null,
+      "missing_information": [],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-07-02 under SILVER_HMO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 No prior authorization rule applies to this procedure/plan.",
+        "check_network: FAIL \u2014 Out-of-network provider is not covered under SILVER_HMO.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for network_restriction does not apply.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $210.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_network: FAIL \u2014 Out-of-network provider is not covered under SILVER_HMO.",
+        "check_emergency_exemption: FAIL \u2014 Claim documents a non-emergency service; the emergency exemption for network_restriction does not apply."
+      ],
+      "review_reasons": [],
+      "reasoning_summary": "The claim is for an out-of-network provider under SILVER_HMO and is not marked as an emergency, so both the network restriction and the emergency exemption policies reject coverage. All tool checks confirm the failure, and the rule engine verdict is FAIL.",
+      "latency_ms": 10085.88,
+      "llm_latency_ms": 10077.6,
+      "input_tokens": 1024,
+      "output_tokens": 285,
+      "cost": 0.000367
+    },
+    {
+      "case_id": "hmo-oon-emergency-unknown",
+      "description": "HMO out-of-network, emergency status unknown",
+      "execution_id": "EXE-f72f5dde57aa",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-NET-008",
+        "POL-EMRG-002"
+      ],
+      "retrieved_policies": [
+        "POL-NET-008",
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.92,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "emergency_indicator"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-07-02 under SILVER_HMO.",
+        "get_claim_history: PASS \u2014 1 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 No prior authorization rule applies to this procedure/plan.",
+        "check_network: FAIL \u2014 Out-of-network provider is not covered under SILVER_HMO.",
+        "check_emergency_exemption: INDETERMINATE \u2014 An emergency exemption may waive network_restriction, but the claim's emergency status is unknown.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $210.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_network: FAIL \u2014 Out-of-network provider is not covered under SILVER_HMO.",
+        "check_emergency_exemption: INDETERMINATE \u2014 An emergency exemption may waive network_restriction, but the claim's emergency status is unknown."
+      ],
+      "review_reasons": [
+        "Required information is missing: emergency_indicator.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim."
+      ],
+      "reasoning_summary": "The claim fails the network restriction check, but an emergency exemption could apply if an emergency indicator were documented. Since the emergency status is unknown, the claim cannot be approved or denied automatically. Human review is required to verify emergency documentation.",
+      "latency_ms": 9265.25,
+      "llm_latency_ms": 9250.11,
+      "input_tokens": 1032,
+      "output_tokens": 472,
+      "cost": 0.000509
+    },
+    {
+      "case_id": "incomplete-claim",
+      "description": "Amount and diagnosis missing",
+      "execution_id": "EXE-f81d7d1c0139",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [],
+      "retrieved_policies": [
+        "POL-PT-007",
+        "POL-NET-008",
+        "POL-EMRG-002",
+        "POL-ELIG-003"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.9,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "amount",
+        "diagnosis_code"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: PASS \u2014 Member active on 2026-08-19 under SILVER_HMO.",
+        "get_claim_history: PASS \u2014 6/20 visits used in 2026.",
+        "check_prior_authorization: PASS \u2014 No prior authorization rule applies to this procedure/plan.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: INDETERMINATE \u2014 Billed amount missing."
+      ],
+      "notable_tools": [
+        "calculate_financial_threshold: INDETERMINATE \u2014 Billed amount missing."
+      ],
+      "review_reasons": [
+        "Required information is missing: amount, diagnosis_code.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim."
+      ],
+      "reasoning_summary": "The claim meets eligibility, visit\u2011limit, and network requirements, but the billed amount is missing, leading to an indeterminate financial calculation. Without the amount the system cannot determine payment, so a human review is required to supply the missing data.",
+      "latency_ms": 14084.68,
+      "llm_latency_ms": 14071.15,
+      "input_tokens": 965,
+      "output_tokens": 600,
+      "cost": 0.000595
+    },
+    {
+      "case_id": "unknown-member",
+      "description": "Member not found in enrollment",
+      "execution_id": "EXE-74ba1514ebfa",
+      "expected": "HUMAN_REVIEW",
+      "actual": "HUMAN_REVIEW",
+      "correct": true,
+      "expected_policies": [
+        "POL-ELIG-003"
+      ],
+      "retrieved_policies": [
+        "POL-EMRG-002",
+        "POL-ELIG-003",
+        "POL-LAB-009",
+        "POL-FIN-004"
+      ],
+      "supplemental_policies": [],
+      "retrieval_ok": true,
+      "llm_called": true,
+      "invalid_output": false,
+      "grounded": true,
+      "grounding_failures": [],
+      "human_review_required": true,
+      "escalation_ok": true,
+      "unsafe": false,
+      "confidence": 0.9,
+      "risk_level": "MEDIUM",
+      "deterministic_outcome": "INDETERMINATE",
+      "llm_recommendation": "HUMAN_REVIEW",
+      "llm_error": null,
+      "missing_information": [
+        "member_enrollment_record"
+      ],
+      "tool_summary": [
+        "check_member_eligibility: INDETERMINATE \u2014 Member MBR-99999 not found in enrollment records.",
+        "get_claim_history: PASS \u2014 0 prior claim(s); no duplicates or benefit limits triggered.",
+        "check_prior_authorization: PASS \u2014 Procedure does not require prior authorization.",
+        "check_network: PASS \u2014 No network restriction violated.",
+        "calculate_financial_threshold: PASS \u2014 Billed amount $45.00 is below the high-value threshold."
+      ],
+      "notable_tools": [
+        "check_member_eligibility: INDETERMINATE \u2014 Member MBR-99999 not found in enrollment records."
+      ],
+      "review_reasons": [
+        "Required information is missing: member_enrollment_record.",
+        "Deterministic rule verdict is INDETERMINATE; the rules alone cannot decide this claim."
+      ],
+      "reasoning_summary": "The claim\u2019s eligibility cannot be confirmed because the member enrollment record is missing, causing an indeterminate eligibility result. All other checks pass, but without proof of active coverage the claim cannot be approved or denied automatically.",
+      "latency_ms": 8544.34,
+      "llm_latency_ms": 8527.3,
+      "input_tokens": 975,
+      "output_tokens": 282,
+      "cost": 0.000358
+    }
+  ]
+}

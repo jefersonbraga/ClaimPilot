@@ -32,8 +32,8 @@ PROVIDERS = {
     },
     "groq": {
         "key_envs": ("GROQ_API_KEY",), "model_env": "GROQ_MODEL", "base_url_env": None,
-        "base_url": "https://api.groq.com/openai/v1", "model": "llama-3.3-70b-versatile",
-        "price_in": 0.00059, "price_out": 0.00079,
+        "base_url": "https://api.groq.com/openai/v1", "model": "openai/gpt-oss-120b",
+        "price_in": 0.00015, "price_out": 0.00075,
     },
 }
 # With LLM_PROVIDER=auto, the first key found decides the provider.

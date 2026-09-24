@@ -106,7 +106,7 @@ def test_provider_profiles_resolve_keys_urls_and_prices(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
     groq = Settings(llm_provider="auto")
     assert (groq.resolved_provider, groq.llm_api_key, groq.llm_base_url, groq.llm_model) == \
-        ("groq", "gsk-test", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile")
+        ("groq", "gsk-test", "https://api.groq.com/openai/v1", "openai/gpt-oss-120b")
 
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
     deepseek = Settings(llm_provider="deepseek")
