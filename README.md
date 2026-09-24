@@ -1,8 +1,8 @@
-# ClaimPilot — Healthcare Claims AI Investigator
+# ClaimPilot AI — Claims Exception Resolution (FDE Case Study)
 
 [![CI](https://github.com/jefersonbraga/ClaimPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/jefersonbraga/ClaimPilot/actions/workflows/ci.yml)
 
-ClaimPilot is an independent technical demonstration of an AI-assisted claims exception investigation workflow using synthetic healthcare data.
+ClaimPilot is an independent technical demonstration of an AI-assisted claims exception investigation workflow using synthetic healthcare data. Built by **Jeferson Carmo** as a Forward Deployed Engineering case study: ambiguous operations problem → architecture → rapid prototype → deterministic controls → LLM reasoning → evaluation → human escalation → production path.
 
 **▶ Live demo: [claimpilot-production-f9f9.up.railway.app](https://claimpilot-production-f9f9.up.railway.app)**. Real model (DeepSeek), rate-limited and budget-capped. Start with the preselected *Ambiguous Emergency* scenario. · [2–3 minute demo script](DEMO.md) · [API docs](https://claimpilot-production-f9f9.up.railway.app/docs)
 

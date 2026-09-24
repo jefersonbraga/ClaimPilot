@@ -16,11 +16,11 @@ const TOOL_NAMES = {
 };
 const TOOL_ICON = { PASS: "✓", FAIL: "✕", INDETERMINATE: "?" };
 const VERDICT = {
-  APPROVE: { cls: "approve", label: "Approve", pill: "Autonomous",
+  APPROVE: { cls: "approve", label: "Approve", pill: "No manual review required",
     sub: "All deterministic checks passed, the model agreed, and every citation was verified against policy text." },
-  DENY: { cls: "deny", label: "Deny", pill: "Autonomous",
-    sub: "A deterministic rule failed and no exemption applied. The model concurred; the decision comes from the rules." },
-  HUMAN_REVIEW: { cls: "review", label: "Human review", pill: "Escalated",
+  DENY: { cls: "deny", label: "Deny", pill: "Recommended denial",
+    sub: "A deterministic rule failed and no exemption applied; the model concurred. In production, denials would go to an analyst for sign-off." },
+  HUMAN_REVIEW: { cls: "review", label: "Human review", pill: "Escalated to an analyst",
     sub: "ClaimPilot did not decide on its own. The case goes to an analyst with the reasons and evidence below." },
 };
 
@@ -375,7 +375,9 @@ function renderDecision(d) {
   const conf = Math.round(d.confidence * 100);
   $("#confidence").innerHTML = `${conf}%<span class="conf-bar ${d.confidence < 0.8 ? "low" : ""}"><i style="width:${conf}%"></i></span>`;
   $("#risk").innerHTML = `<span class="tag ${esc(d.risk_level)}">${esc(d.risk_level)}</span>`;
-  $("#rules").innerHTML = `<span class="tag ${esc(d.deterministic_outcome)}">${esc(d.deterministic_outcome)}</span>`;
+  // A PASS can follow a failed check when an exemption rescued it (e.g. PA missing, emergency exemption applies).
+  const rescued = d.deterministic_outcome === "PASS" && d.tool_results.some((t) => t.outcome === "FAIL");
+  $("#rules").innerHTML = `<span class="tag ${esc(d.deterministic_outcome)}">${esc(d.deterministic_outcome)}${rescued ? " · exemption applied" : ""}</span>`;
   $("#review").innerHTML = `<span class="tag ${d.human_review_required ? "yes" : "no"}">${d.human_review_required ? "Yes" : "No"}</span>`;
 
   // The story in one glance: every check that did not simply pass, plus any exemption that was evaluated.
@@ -451,7 +453,7 @@ const FLOW_STEPS = {
   refine: { title: "Refine retrieval", category: "04 · Findings-driven policy", purpose: "Look for policy context that only becomes relevant after the checks run.", input: "Non-passing checks and deterministic risk signals.", output: "Additional relevant policies; skipped when there are no findings.", prefixes: ["refine_retrieval:"] },
   llm: { title: "Interpret with AI", category: "05 · One structured model call", purpose: "Read policy text against the facts and explain the exception in context.", input: "Retrieved policy passages, claim and deterministic tool results.", output: "A structured recommendation, citations and a short operational summary. The model cannot override the rules.", prefixes: ["analyze_claim:"] },
   risk: { title: "Evaluate risk", category: "06 · Guardrails", purpose: "Check grounding, missing information, risk and agreement with the rules.", input: "Rule verdict, model output and verified policy evidence.", output: "Review reasons that block an autonomous outcome when any control fails.", prefixes: ["evaluate_risk:"] },
-  decide: { title: "Recommend", category: "07A · Automatic branch", purpose: "Generate an approval or denial from the deterministic rules when all controls agree.", input: "Conclusive rules, model agreement and no review triggers.", output: "APPROVE or DENY, supported by evidence. This is a synthetic demonstration.", prefixes: ["generate_recommendation:"] },
+  decide: { title: "Recommend", category: "07A · Recommendation branch", purpose: "Generate an approval or denial from the deterministic rules when all controls agree.", input: "Conclusive rules, model agreement and no review triggers.", output: "APPROVE or DENY, supported by evidence. This is a synthetic demonstration.", prefixes: ["generate_recommendation:"] },
   review: { title: "Human review", category: "07B · Escalation branch", purpose: "Make uncertainty explicit so an analyst knows what needs resolving.", input: "Missing identifiers, missing evidence, conflicting policies or other review triggers.", output: "HUMAN_REVIEW with reasons and missing facts. An analyst can supply facts and re-analyze; no human decision is recorded by this demo.", prefixes: ["escalate_to_human:"] },
   audit: { title: "Record & replay", category: "08 · Audit", purpose: "Keep the recommendation, evidence and execution context together.", input: "Either outcome, its policy evidence and the path through the workflow.", output: "A stored execution with model, prompt and workflow versions, accessible by execution ID.", prefixes: [] },
 };
