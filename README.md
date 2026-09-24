@@ -344,7 +344,7 @@ When a limit is hit the API returns `429` before any LLM call, and `/health` sho
 
 ### Execution history and privacy in the public demo
 
-There is no login, so history is scoped to an **anonymous visitor cookie** (`cp_visitor`: random, `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS, 90 days). Only a SHA-256 hash of it is stored with each execution. Each visitor sees only their own runs in `GET /executions`, `GET /claims/{id}/audit` and the UI. A single decision stays shareable by its unguessable execution ID. The list view leaves out free-text claim fields. In production, history would be scoped by authenticated identity and role (analyst, supervisor, auditor) instead of a cookie.
+There is no login, so history is scoped to an **anonymous visitor cookie** (`cp_visitor`: random, `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS, 90 days). Only a SHA-256 hash of it is stored with each execution. Each visitor sees only their own runs in `GET /executions`, `GET /claims/{id}/audit` and the UI. A single decision stays shareable by its unguessable execution ID. The list view leaves out free-text claim fields. On the live deployment the audit store sits on a persistent volume, so history survives redeploys. In production, history would be scoped by authenticated identity and role (analyst, supervisor, auditor) instead of a cookie.
 
 ### Deploying
 
