@@ -198,6 +198,13 @@
             <textarea id="claim-json" spellcheck="false" autocomplete="off" rows="14" aria-describedby="json-status"></textarea>
             <p class="json-status" id="json-status" aria-live="polite"></p>
             </details>
+            <div class="model-picker" id="model-picker" hidden>
+              <div class="model-picker-head">
+                <span class="field-label" id="model-label">Model</span>
+                <span class="model-hint" id="model-hint"></span>
+              </div>
+              <div class="segmented" id="model-options" role="radiogroup" aria-labelledby="model-label"></div>
+            </div>
             <button type="button" class="btn-primary" id="analyze">
               <span class="btn-label">Analyze Claim</span>
               <span class="spinner" aria-hidden="true"></span>

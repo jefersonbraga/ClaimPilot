@@ -29,8 +29,9 @@ C="curl -s -c /tmp/cp.jar -b /tmp/cp.jar"
 1. Click **Analyze Claim**. The workflow diagram lights up step by step as the backend runs each node. With a real model, *Interpret with AI* pulses during the model call. The page then scrolls to the result: HUMAN_REVIEW, with the checks that drove it, the missing `emergency_indicator` and the verified evidence.
 2. Click **View Full Decision Replay** to see the stored execution record.
 3. Pick **Emergency Confirmed** and analyze again. A banner shows `HUMAN_REVIEW → APPROVE` and the fields that changed.
-4. Scroll to **Your execution history**: both runs are listed. **Open** reloads any past decision into the workbench and diagram, and **Copy link** gives a URL (`/?execution=EXE-…`) that opens that exact decision in any browser.
-5. Scroll down to the evaluation snapshot.
+4. **Model trade-off (optional):** switch *Model* to **Groq** and analyze the same claim again. The decision holds, because rules and guardrails do not depend on the model, and the banner shows the latency and cost difference.
+5. Scroll to **Your execution history**: both runs are listed. **Open** reloads any past decision into the workbench and diagram, and **Copy link** gives a URL (`/?execution=EXE-…`) that opens that exact decision in any browser.
+6. Scroll down to the evaluation snapshot.
 
 The steps below are the same story with curl, for a terminal-only demo. To run it in one go: `./scripts/demo.sh` (set `NO_PAUSE=1` to skip the pauses).
 

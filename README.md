@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       56 behaviour tests + 9 browser tests for the UI
+tests/                       58 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -174,6 +174,7 @@ The **workbench UI** at `/` is plain HTML, CSS and JavaScript served by the same
 - **live progress while the analysis runs**: each step lights up as the backend completes the matching LangGraph node (streamed from the API, not a simulated animation), then the recorded path
 - which workflow steps actually ran
 - a before/after comparison when the same claim is re-analyzed
+- **model choice per analysis** (DeepSeek by default, Groq as the alternative): re-run the same claim on the other model and the comparison shows the recommendation, latency and cost side by side, with the same rules and guardrails throughout
 - **your execution history**: every analysis from this browser, reopenable into the workbench, with a shareable link per decision
 - the latest evaluation snapshot
 
@@ -292,7 +293,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 56 tests
+pytest                              # 58 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
@@ -358,12 +359,12 @@ Platform settings are versioned in `railway.json`. Keys live only in the platfor
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/claims/analyze` | Run the workflow; returns `ClaimDecision`. With `Accept: application/x-ndjson` it streams one event per completed LangGraph node, then the decision (the UI uses this for live progress) |
+| `POST` | `/claims/analyze` | Run the workflow; returns `ClaimDecision`. Optional `?provider=deepseek\|groq\|…` picks the model for this analysis (any provider with a key on the server; see `/health` `available_providers`). With `Accept: application/x-ndjson` it streams one event per completed LangGraph node, then the decision (the UI uses this for live progress) |
 | `GET` | `/executions/{execution_id}` | **Decision replay** (shareable by ID; also opens in the UI at `/?execution=…`): outcome, reasons, evidence, policy versions, tool summary, routing trail, model/prompt/workflow versions, latency, tokens, cost |
 | `GET` | `/executions` | **Your** recent executions (outcome, model, latency, cost), newest first; `?claim_id=` and `?limit=` filters |
 | `GET` | `/claims/{claim_id}/audit` | Every execution of a claim in **your** history, as full records |
 | `GET` | `/metrics` | Volume, human-review rate, latency, tokens, cost |
-| `GET` | `/health` | Liveness, provider/model, prompt and workflow versions |
+| `GET` | `/health` | Liveness, default provider/model, `available_providers`, prompt and workflow versions |
 | `GET` | `/` | Demo workbench UI (static page; uses the endpoints above) |
 | `GET` | `/demo/scenarios` | Predefined synthetic demo claims (`data/claims/scenarios.json`) |
 | `GET` | `/evals/latest` | Summary of the last `python -m evals.run` (404 until one exists; the Docker image runs it at build time) |

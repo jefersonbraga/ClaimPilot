@@ -60,3 +60,36 @@ def test_analyze_can_stream_per_node_progress(client):
     decision = events[-1]
     assert decision["event"] == "decision" and decision["decision"]["recommendation"] == "HUMAN_REVIEW"
     assert client.get(f"/executions/{decision['decision']['execution_id']}").status_code == 200
+
+
+def test_caller_can_pick_the_model_provider_per_analysis(client, make_investigator):
+    """Same claim, same rules and guardrails; only the model changes. Unknown providers are refused."""
+    from fastapi import HTTPException
+
+    from app.main import get_investigator_selector
+    from tests.conftest import ScriptedLLM
+
+    class OtherModel(ScriptedLLM):
+        provider, model = "groq", "other-model"
+
+    other = make_investigator(OtherModel("not json"))  # any model; guardrails keep the outcome safe
+
+    def select(provider):
+        if provider != "groq":
+            raise HTTPException(422, f"Provider '{provider}' is not available on this server.")
+        return other
+
+    app.dependency_overrides[get_investigator_selector] = lambda: select
+
+    default = client.post("/claims/analyze", json=claim_json("01_obvious_approval")).json()
+    picked = client.post("/claims/analyze?provider=groq", json=claim_json("01_obvious_approval")).json()
+    assert client.get(f"/executions/{default['execution_id']}").json()["llm_provider"] == "mock"
+    assert client.get(f"/executions/{picked['execution_id']}").json()["model"] == "other-model"
+    assert picked["recommendation"] == "HUMAN_REVIEW"  # invalid model output -> safe fallback, never autonomous
+    assert client.post("/claims/analyze?provider=nope", json=claim_json("01_obvious_approval")).status_code == 422
+    assert client.post("/claims/analyze?provider=Bad!", json=claim_json("01_obvious_approval")).status_code == 422
+
+
+def test_health_lists_available_providers(client):
+    providers = client.get("/health").json()["available_providers"]
+    assert providers and providers[0]["default"] is True

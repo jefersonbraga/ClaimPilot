@@ -33,12 +33,13 @@ One-time setup, about 10 minutes, in the Railway dashboard:
    | Variable | Value |
    |---|---|
    | `LLM_PROVIDER` | `deepseek` (or `groq`) |
-   | `DEEPSEEK_API_KEY` | your key (or `GROQ_API_KEY`) |
+   | `DEEPSEEK_API_KEY` | your DeepSeek key |
+   | `GROQ_API_KEY` | optional: your Groq key; enables the model picker in the UI |
    | `DAILY_LLM_BUDGET_USD` | `1.00` |
    | `RATE_LIMIT_PER_MINUTE` | `10` |
    | `DAILY_MAX_ANALYSES` | `300` |
 
-   Without a key the app still runs, on the deterministic mock model.
+   Without a key the app still runs, on the deterministic mock model. Every provider with a key appears in the UI's *Model* picker, with `LLM_PROVIDER` as the default. Budget and rate limits apply to the total across providers.
 3. **Service → Settings → Source:** branch `main`, and turn on **Wait for CI**.
 4. **Service → Settings → Networking → Generate Domain.** This is the public URL to put at the top of the README.
 5. Keep **one replica**, which is the default. The rate-limit and budget counters live in memory.

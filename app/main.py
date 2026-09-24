@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.config import DATA_DIR, ROOT_DIR, WORKFLOW_VERSION, get_settings
+from app.config import DATA_DIR, PROVIDERS, ROOT_DIR, WORKFLOW_VERSION, Settings, get_settings
 from app.llm.client import get_llm
 from app.limits import UsageGuard
 from app.llm.prompts import PROMPT_VERSION
@@ -76,12 +76,38 @@ def get_investigator() -> ClaimInvestigator:
     return ClaimInvestigator(llm=get_llm(settings), policy_store=get_policy_store(), audit=get_audit_store(), settings=settings)
 
 
+def available_providers() -> list[dict]:
+    """Providers a caller may pick per analysis: those with a key configured on the server. Default first."""
+    default = get_settings().resolved_provider
+    found = [{"id": name, "model": s.llm_model, "default": name == default}
+             for name in PROVIDERS if (s := Settings(llm_provider=name)).llm_api_key]
+    if not found:
+        found = [{"id": "mock", "model": "mock-analyst-v1", "default": True}]
+    return sorted(found, key=lambda p: not p["default"])
+
+
+@lru_cache(maxsize=None)
+def _investigator_for(provider: str) -> ClaimInvestigator:
+    settings = Settings(llm_provider=provider)
+    return ClaimInvestigator(llm=get_llm(settings), policy_store=get_policy_store(), audit=get_audit_store(), settings=settings)
+
+
+def get_investigator_selector():
+    """Returns provider -> investigator for per-request model choice (overridable in tests)."""
+    def select(provider: str) -> ClaimInvestigator:
+        if provider not in {p["id"] for p in available_providers()}:
+            raise HTTPException(422, f"Provider '{provider}' is not available on this server.")
+        return _investigator_for(provider)
+    return select
+
+
 @app.get("/health")
 def health(investigator: ClaimInvestigator = Depends(get_investigator), guard: UsageGuard = Depends(get_usage_guard)):
     return {
         "status": "ok",
         "llm_provider": investigator.llm.provider,
         "model": investigator.llm.model,
+        "available_providers": available_providers(),
         "prompt_version": PROMPT_VERSION,
         "workflow_version": WORKFLOW_VERSION,
         "policies_loaded": len(get_policy_store().policies),
@@ -91,7 +117,12 @@ def health(investigator: ClaimInvestigator = Depends(get_investigator), guard: U
 
 @app.post("/claims/analyze", response_model=ClaimDecision)
 def analyze_claim(claim: Claim, request: Request, investigator: ClaimInvestigator = Depends(get_investigator),
-                  guard: UsageGuard = Depends(get_usage_guard), visitor: str = Depends(current_visitor)):
+                  guard: UsageGuard = Depends(get_usage_guard), visitor: str = Depends(current_visitor),
+                  select_investigator=Depends(get_investigator_selector),
+                  provider: str | None = Query(None, pattern=r"^[a-z]{2,20}$",
+                                               description="Model provider for this analysis (see /health available_providers); default when omitted")):
+    if provider and provider != investigator.llm.provider:
+        investigator = select_investigator(provider)  # same workflow, rules and guardrails; only the model changes
     guard.check(request.client.host if request.client else "unknown")  # 429 before any LLM spend
     if "application/x-ndjson" in request.headers.get("accept", ""):
         # Same endpoint, same workflow; the client opted into per-node progress events (used by the demo UI).

@@ -24,7 +24,34 @@ const VERDICT = {
     sub: "ClaimPilot did not decide on its own. The case goes to an analyst with the reasons and evidence below." },
 };
 
-const state = { scenarios: [], current: null, last: null, replay: null, busy: false, revision: 0, retrying: false };
+const state = { scenarios: [], current: null, last: null, replay: null, busy: false, revision: 0, retrying: false,
+                providers: [], provider: null };
+
+// Same workflow, rules and guardrails for every provider: only the model changes.
+const PROVIDER_INFO = {
+  deepseek: { name: "DeepSeek", hint: "Default · about 2 s per claim" },
+  groq: { name: "Groq", hint: "Alternative · free-tier rate limits can slow it down; a refused call falls back safely to human review" },
+  openai: { name: "OpenAI-compatible", hint: "Generic OpenAI-compatible endpoint" },
+  mock: { name: "Mock", hint: "Deterministic stand-in: no API key is configured on this server" },
+};
+const currentProvider = () => state.providers.find((p) => p.id === state.provider) || state.providers[0] || null;
+
+function renderProviders(list) {
+  state.providers = list || [];
+  const def = state.providers.find((p) => p.default) || state.providers[0];
+  state.provider = def ? def.id : null;
+  $("#model-picker").hidden = state.providers.length < 2;
+  $("#model-options").innerHTML = state.providers.map((p) => `
+    <button type="button" role="radio" data-provider="${esc(p.id)}" aria-checked="${p.id === state.provider}">
+      <b>${esc((PROVIDER_INFO[p.id] || { name: p.id }).name)}${p.default ? " · default" : ""}</b><span>${esc(p.model)}</span>
+    </button>`).join("");
+  selectProvider(state.provider);
+}
+function selectProvider(id) {
+  state.provider = id;
+  document.querySelectorAll("#model-options [data-provider]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.provider === id)));
+  $("#model-hint").textContent = (PROVIDER_INFO[id] || { hint: "" }).hint;
+}
 
 // ------------------------------------------------------------------ API
 
@@ -191,7 +218,9 @@ function paintLive() {
 }
 
 async function requestAnalysis(claim, onNode) {
-  const res = await fetch("/claims/analyze", {
+  const chosen = currentProvider();
+  const query = chosen && !chosen.default ? `?provider=${encodeURIComponent(chosen.id)}` : "";
+  const res = await fetch(`/claims/analyze${query}`, {
     method: "POST", headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" }, body: JSON.stringify(claim),
   });
   if (!res.ok) {
@@ -250,7 +279,8 @@ async function analyze() {
     const followed = live.active;
     stopLive();
     const previous = state.last;
-    const run = { claim, decision, replay: null, scenario, revision };
+    const chosen = currentProvider();
+    const run = { claim, decision, replay: null, scenario, revision, provider: chosen && { id: chosen.id, model: chosen.model } };
     state.last = run;
     state.replay = null;
     render(decision, null, previous);
@@ -358,10 +388,17 @@ function renderCompare(d, prev) {
     .filter((k) => JSON.stringify(prev.claim[k]) !== JSON.stringify(now[k]))
     .map((k) => `<code>${esc(k)}</code>: ${esc(JSON.stringify(prev.claim[k] ?? null))} → ${esc(JSON.stringify(now[k] ?? null))}`);
   const tag = (rec) => `<span class="tag ${rec === "APPROVE" ? "PASS" : rec === "DENY" ? "FAIL" : "INDETERMINATE"}">${esc(rec)}</span>`;
+  const before = prev.provider && prev.provider.model, after = state.last.provider && state.last.provider.model;
+  const modelChanged = before && after && before !== after;
+  if (modelChanged) changed.push(`<code>model</code>: ${esc(before)} → ${esc(after)}`);
+  const secs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`);
+  const metrics = modelChanged
+    ? `<span class="compare-metrics">latency ${secs(prev.decision.latency_ms)} → ${secs(d.latency_ms)} · cost $${prev.decision.estimated_cost.toFixed(5)} → $${d.estimated_cost.toFixed(5)}</span>`
+    : "";
   el.innerHTML = `
-    <span class="compare-k">Same claim, re-analyzed</span>
+    <span class="compare-k">${modelChanged && changed.length === 1 ? "Same claim, different model" : "Same claim, re-analyzed"}</span>
     <span class="compare-flow">${tag(prev.decision.recommendation)}<span class="compare-arrow">→</span>${tag(d.recommendation)}</span>
-    <span class="compare-change">${changed.length ? `Changed: ${changed.join(" · ")}` : "No input changes"}</span>`;
+    <span class="compare-change">${changed.length ? `Changed: ${changed.join(" · ")}` : "No input changes"}</span>${metrics}`;
   el.hidden = false;
 }
 
@@ -780,7 +817,8 @@ async function openExecution(id, { scroll = true } = {}) {
     setClaimText(r.claim);
   }
   const decision = decisionFromRecord(r);
-  state.last = { claim: r.claim, decision, replay: r, scenario: `Recorded · ${r.execution_id}`, revision: state.revision };
+  state.last = { claim: r.claim, decision, replay: r, scenario: `Recorded · ${r.execution_id}`, revision: state.revision,
+                 provider: { id: r.llm_provider, model: r.model } };
   state.replay = r;
   render(decision, r, null);
   renderFlow(r);
@@ -846,6 +884,7 @@ async function loadVersions() {
   try {
     const h = await api("/health");
     $("#versions").textContent = `${h.workflow_version} · ${h.prompt_version} · ${h.model}`;
+    renderProviders(h.available_providers || []);
   } catch { /* footer only */ }
 }
 
@@ -871,6 +910,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => switchReplayView(t.dataset.view)));
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); analyze(); }
+  });
+  $("#model-options").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-provider]");
+    if (b && !state.busy) selectProvider(b.dataset.provider);
   });
   $("#history-refresh").addEventListener("click", loadHistory);
   $("#history-filter").addEventListener("change", loadHistory);
