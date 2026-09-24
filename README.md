@@ -165,6 +165,7 @@ The **workbench UI** at `/` is plain HTML, CSS and JavaScript served by the same
 - verified policy evidence (policies added by the second retrieval pass are marked)
 - deterministic tool results
 - execution metadata, and the full decision replay (formatted or raw JSON)
+- **live progress while the analysis runs**: each step lights up as the backend completes the matching LangGraph node (streamed from the API, not a simulated animation), then the recorded path
 - which workflow steps actually ran
 - a before/after comparison when the same claim is re-analyzed
 - the latest evaluation snapshot
@@ -286,7 +287,7 @@ pytest                              # 49 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
-Optional browser tests for the workbench UI (7 scenarios, Node + Playwright, mock provider, isolated database):
+Optional browser tests for the workbench UI (8 scenarios, Node + Playwright, mock provider, isolated database):
 
 ```bash
 npm i --no-save playwright && npx playwright install chromium
@@ -355,7 +356,7 @@ gcloud run deploy claimpilot --source . --region us-central1 --port 8000 \
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/claims/analyze` | Run the workflow; returns `ClaimDecision` |
+| `POST` | `/claims/analyze` | Run the workflow; returns `ClaimDecision`. With `Accept: application/x-ndjson` it streams one event per completed LangGraph node, then the decision (the UI uses this for live progress) |
 | `GET` | `/executions/{execution_id}` | **Decision replay**: outcome, reasons, evidence, policy versions, tool summary, routing trail, model/prompt/workflow versions, latency, tokens, cost |
 | `GET` | `/claims/{claim_id}/audit` | Every execution for a claim |
 | `GET` | `/metrics` | Volume, human-review rate, latency, tokens, cost |

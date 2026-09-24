@@ -46,3 +46,17 @@ def test_malformed_claim_is_rejected(client):
 
 def test_unknown_execution_is_404(client):
     assert client.get("/executions/EXE-nope").status_code == 404
+
+
+def test_analyze_can_stream_per_node_progress(client):
+    """Same endpoint; with Accept: application/x-ndjson it reports each LangGraph node as it completes."""
+    r = client.post("/claims/analyze", json=claim_json("04_ambiguous_emergency_unknown"),
+                    headers={"Accept": "application/x-ndjson"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+    events = [json.loads(line) for line in r.text.splitlines()]
+    nodes = [e["node"] for e in events if e["event"] == "node"]
+    assert nodes == ["validate_claim", "retrieve_policy", "check_eligibility", "check_authorization",
+                     "refine_retrieval", "analyze_claim", "evaluate_risk", "escalate_to_human", "record_audit"]
+    decision = events[-1]
+    assert decision["event"] == "decision" and decision["decision"]["recommendation"] == "HUMAN_REVIEW"
+    assert client.get(f"/executions/{decision['decision']['execution_id']}").status_code == 200

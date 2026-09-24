@@ -6,7 +6,7 @@ from pathlib import Path
 from statistics import mean
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import DATA_DIR, ROOT_DIR, WORKFLOW_VERSION, get_settings
@@ -65,9 +65,25 @@ def health(investigator: ClaimInvestigator = Depends(get_investigator), guard: U
 def analyze_claim(claim: Claim, request: Request, investigator: ClaimInvestigator = Depends(get_investigator),
                   guard: UsageGuard = Depends(get_usage_guard)):
     guard.check(request.client.host if request.client else "unknown")  # 429 before any LLM spend
+    if "application/x-ndjson" in request.headers.get("accept", ""):
+        # Same endpoint, same workflow; the client opted into per-node progress events (used by the demo UI).
+        return StreamingResponse(_progress_events(investigator, claim, guard), media_type="application/x-ndjson")
     decision = investigator.investigate(claim)
     guard.record(decision.estimated_cost)
     return decision
+
+
+def _progress_events(investigator: ClaimInvestigator, claim: Claim, guard: UsageGuard):
+    """NDJSON stream: {"event": "node", ...} per completed workflow node, then {"event": "decision", ...}."""
+    try:
+        for kind, payload in investigator.investigate_stream(claim):
+            if kind == "decision":
+                guard.record(payload.estimated_cost)
+                yield json.dumps({"event": "decision", "decision": payload.model_dump(mode="json")}) + "\n"
+            else:
+                yield json.dumps({"event": "node", **payload}) + "\n"
+    except Exception as e:  # the HTTP status is already 200 once streaming starts; report failure in-band
+        yield json.dumps({"event": "error", "detail": f"{type(e).__name__}: {e}"}) + "\n"
 
 
 @app.get("/claims/{claim_id}/audit", response_model=list[ExecutionRecord])

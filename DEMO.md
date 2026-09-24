@@ -18,7 +18,7 @@ docker compose up --build
 Everything below assumes `http://localhost:8000`. Only `curl` and `python3` are needed; `python3 -m json.tool` does the pretty-printing, so `jq` isn't required.
 
 **Visual version:** open **http://localhost:8000**. The *Ambiguous Emergency* scenario is preselected.
-1. Click **Analyze Claim**. The result is HUMAN_REVIEW, with the checks that drove it, the missing `emergency_indicator` and the verified evidence.
+1. Click **Analyze Claim**. The workflow diagram lights up step by step as the backend runs each node. With a real model, *Interpret with AI* pulses during the model call. The page then scrolls to the result: HUMAN_REVIEW, with the checks that drove it, the missing `emergency_indicator` and the verified evidence.
 2. Click **View Full Decision Replay** to see the stored execution record.
 3. Pick **Emergency Confirmed** and analyze again. A banner shows `HUMAN_REVIEW → APPROVE` and the one field that changed.
 4. Scroll down to the evaluation snapshot.

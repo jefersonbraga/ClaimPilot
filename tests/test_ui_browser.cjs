@@ -184,3 +184,22 @@ test('Responsive layout, keyboard selection and manual reduced-motion replay', a
     assert.equal(await p.locator('#flow-edges').isVisible(), width > 760);
   }
 });
+
+test('Live progress follows the streamed workflow events while an analysis runs', async t => {
+  const p = await page(t);
+  await p.locator('.scenario[data-id="ambiguous-emergency"]').click();
+  const seen = [];
+  await p.locator('#analyze').click();
+  while (await p.locator('#analyze').isDisabled()) {
+    const running = await p.locator('#flow .live-running').evaluateAll(ns => ns.map(n => n.dataset.step));
+    for (const s of running) if (seen[seen.length - 1] !== s) seen.push(s);
+    if (running.length) assert.match(await p.locator('#flow-status').textContent(), /^Investigating · live/);
+    await p.waitForTimeout(40);
+  }
+  // Order is the real node order; the escalation branch is taken, so "decide" never runs.
+  assert.deepEqual(seen.filter(s => ['retrieve', 'tools', 'refine', 'llm', 'risk', 'audit'].includes(s)),
+                   ['retrieve', 'tools', 'refine', 'llm', 'risk', 'audit']);
+  assert.ok(!seen.includes('decide'));
+  assert.equal(await p.locator('#flow .live-running, #flow .live-pending').count(), 0);
+  assert.match(await status(p, 'review'), /Executed/);
+});

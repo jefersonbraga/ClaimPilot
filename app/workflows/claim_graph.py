@@ -299,8 +299,22 @@ class ClaimInvestigator:
         self.llm = llm
         self.graph = build_graph(llm=llm, policy_store=policy_store, audit=audit, settings=settings)
 
+    @staticmethod
+    def _initial_state(claim: Claim) -> dict:
+        return {"execution_id": f"EXE-{uuid.uuid4().hex[:12]}", "started_at": time.perf_counter(), "claim": claim,
+                "tool_results": [], "effective_outcomes": [], "retrieval_queries": [], "routing_trail": []}
+
     def investigate(self, claim: Claim) -> ClaimDecision:
-        state = self.graph.invoke({"execution_id": f"EXE-{uuid.uuid4().hex[:12]}", "started_at": time.perf_counter(),
-                                   "claim": claim, "tool_results": [], "effective_outcomes": [],
-                                   "retrieval_queries": [], "routing_trail": []})
-        return state["decision"]
+        return self.graph.invoke(self._initial_state(claim))["decision"]
+
+    def investigate_stream(self, claim: Claim):
+        """Same run as `investigate`, but yields ("node", {node, trail}) as each LangGraph node completes and
+        finally ("decision", ClaimDecision). Lets a UI show real progress instead of a simulated animation."""
+        decision = None
+        for update in self.graph.stream(self._initial_state(claim), stream_mode="updates"):
+            for node, delta in update.items():
+                delta = delta or {}
+                trail = delta.get("routing_trail") or []
+                yield "node", {"node": node, "trail": trail[-1] if trail else None}
+                decision = delta.get("decision", decision)
+        yield "decision", decision

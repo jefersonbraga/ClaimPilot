@@ -132,6 +132,98 @@ function renderClaimSummary(c) {
 
 // ------------------------------------------------------------------ analyze
 
+// ------------------------------------------------------------------ live progress (real, not simulated)
+
+// The API streams one event per completed LangGraph node when asked for NDJSON; the diagram follows it.
+const NODE_TO_STEP = {
+  validate_claim: "validate", retrieve_policy: "retrieve", check_eligibility: "tools", check_authorization: "tools",
+  refine_retrieval: "refine", analyze_claim: "llm", evaluate_risk: "risk", generate_recommendation: "decide",
+  escalate_to_human: "review", record_audit: "audit",
+};
+const NEXT_STEP = { validate: "retrieve", retrieve: "tools", tools: "refine", refine: "llm", llm: "risk", decide: "audit", review: "audit" };
+const LIVE_MIN_MS = 320;  // local steps finish in microseconds; pace them just enough to be followed by eye
+const live = { active: false, revision: -1, done: new Set(), skipped: new Set(), running: null, chain: Promise.resolve(), lastPaint: 0 };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function startLive(revision) {
+  Object.assign(live, { active: true, revision, done: new Set(), skipped: new Set(), running: "validate", chain: Promise.resolve(), lastPaint: performance.now() });
+  paintLive();
+  const board = $("#flow-board").getBoundingClientRect();
+  if (board.top < 70 || board.bottom > window.innerHeight) {
+    $("#how").scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  }
+}
+function stopLive() {
+  live.active = false;
+  live.running = null;
+  document.querySelectorAll("#flow [data-step]").forEach((n) => n.classList.remove("live-done", "live-running", "live-pending"));
+}
+async function applyLive(event) {
+  if (!live.active || live.revision !== state.revision) return;
+  const wait = reducedMotion() ? 0 : LIVE_MIN_MS - (performance.now() - live.lastPaint);
+  if (wait > 0) await sleep(wait);
+  if (!live.active || live.revision !== state.revision) return;  // inputs changed mid-flight: stop following
+  const step = NODE_TO_STEP[event.node];
+  if (!step) return;
+  if (event.node === "check_eligibility") {
+    live.running = "tools";  // the facts step spans two graph nodes
+  } else {
+    live.done.add(step);
+    if (step === "refine" && (event.trail || "").includes("skipped")) live.skipped.add("refine");
+    live.running = NEXT_STEP[step] || null;
+  }
+  live.lastPaint = performance.now();
+  paintLive();
+}
+function paintLive() {
+  document.querySelectorAll("#flow [data-step]").forEach((node) => {
+    const key = node.dataset.step, done = live.done.has(key), running = live.running === key;
+    node.classList.toggle("live-done", done);
+    node.classList.toggle("live-running", running);
+    node.classList.toggle("live-pending", !done && !running);
+    node.classList.remove("visited", "skipped", "replay-current");
+    node.querySelector(".node-state").textContent = running
+      ? (key === "llm" ? "● Model call in progress…" : "● Running…")
+      : done ? (live.skipped.has(key) ? "— Nothing to add" : "✓ Done") : "Waiting";
+  });
+  $("#flow-status").textContent = `Investigating · live · ${live.running ? FLOW_STEPS[live.running].title + "…" : "routing the outcome…"}`;
+  drawFlowEdges();
+}
+
+async function requestAnalysis(claim, onNode) {
+  const res = await fetch("/claims/analyze", {
+    method: "POST", headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" }, body: JSON.stringify(claim),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const err = new Error((body && typeof body.detail === "string") ? body.detail : `HTTP ${res.status}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  // A server (or proxy) that ignores the Accept header returns plain JSON: still works, just without progress.
+  if (!(res.headers.get("content-type") || "").includes("ndjson") || !res.body) return res.json();
+  const reader = res.body.getReader(), decoder = new TextDecoder();
+  let buffer = "", decision = null;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      const event = JSON.parse(line);
+      if (event.event === "node") onNode(event);
+      else if (event.event === "decision") decision = event.decision;
+      else if (event.event === "error") throw new Error(event.detail);
+    }
+  }
+  if (!decision) throw new Error("The analysis stream ended without a decision.");
+  return decision;
+}
+
 async function analyze() {
   if (state.busy) return;
   const { claim, error } = parseClaim();
@@ -151,15 +243,18 @@ async function analyze() {
   resetFlow();
   hideError();
   $("#retry-replay").disabled = true;
+  startLive(revision);
   try {
-    const decision = await api("/claims/analyze", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(claim),
-    });
+    const decision = await requestAnalysis(claim, (event) => { live.chain = live.chain.then(() => applyLive(event)); });
+    await live.chain;  // let the diagram finish the path before the result appears
+    const followed = live.active;
+    stopLive();
     const previous = state.last;
     const run = { claim, decision, replay: null, scenario, revision };
     state.last = run;
     state.replay = null;
     render(decision, null, previous);
+    if (followed) window.setTimeout(() => $("#results").scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" }), 450);
     setReplayNotice("Loading the recorded execution…", true);
     try {
       const replay = await api(`/executions/${encodeURIComponent(decision.execution_id)}`);
@@ -170,6 +265,7 @@ async function analyze() {
       setReplayNotice(`The recommendation is available, but its replay could not be loaded (${e.message}). Retry the lookup without running another analysis.`);
     }
   } catch (e) {
+    stopLive();
     if (e.status === 422 && e.body && Array.isArray(e.body.detail)) {
       showError("The API rejected the claim (422 validation error).",
         e.body.detail.map((d) => `${(d.loc || []).join(".")}: ${d.msg}`).join("\n"));
@@ -406,6 +502,7 @@ function clearFlowTimer() {
 }
 function resetFlow() {
   clearFlowTimer();
+  stopLive();
   Object.assign(flow, { record: null, path: [], index: -1, paused: false });
   $("#flow-status").textContent = state.busy ? "Investigating…" : "Conceptual workflow · select a step to explore";
   $("#flow-play").textContent = "Replay execution";
@@ -498,7 +595,8 @@ function drawFlowEdges() {
              cx: (r.left + r.right) / 2 - b.left, cy: (r.top + r.bottom) / 2 - b.top };
   };
   // "Passed through": refine runs even when it has nothing to add, so the path continues through it.
-  const passed = (key) => !!flow.record && (isVisited(key) || stepStatus(key) === "— Skipped");
+  const passed = (key) => live.active ? (live.done.has(key) || live.running === key)
+    : !!flow.record && (isVisited(key) || stepStatus(key) === "— Skipped");
   const off = [], on_ = [];  // taken path is drawn last so it stays on top where branches share a segment
   const edge = (points, on, { early = false, label = "", at = null } = {}) => {
     const out = on ? on_ : off;
