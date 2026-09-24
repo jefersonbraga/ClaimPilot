@@ -4,6 +4,8 @@
 
 ClaimPilot is an independent technical demonstration of an AI-assisted claims exception investigation workflow using synthetic healthcare data.
 
+**▶ Live demo: [claimpilot-production-f9f9.up.railway.app](https://claimpilot-production-f9f9.up.railway.app)**. Real model (DeepSeek), rate-limited and budget-capped. Start with the preselected *Ambiguous Emergency* scenario. · [2–3 minute demo script](DEMO.md) · [API docs](https://claimpilot-production-f9f9.up.railway.app/docs)
+
 - **No real PHI** is used. Every member, claim, provider and policy in this repository is synthetic.
 - **No proprietary payer or provider data** is used. All policy documents were written for this demo.
 - **Not affiliated with, or endorsed by, any healthcare company.**

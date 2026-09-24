@@ -4,6 +4,8 @@
 
 All data is synthetic.
 
+**Live:** https://claimpilot-production-f9f9.up.railway.app. No setup needed; replace `localhost:8000` below with this URL.
+
 ## Setup (before the demo)
 
 ```bash
