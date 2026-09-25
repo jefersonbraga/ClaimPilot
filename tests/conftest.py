@@ -44,3 +44,12 @@ def demo_claim():
         data = json.loads((DATA_DIR / "claims" / f"{name}.json").read_text())
         return Claim(**{**data, **overrides})
     return _load
+
+
+@pytest.fixture(autouse=True)
+def _fresh_general_rate_limit():
+    """The general per-client limiter is process-wide; keep tests independent of each other."""
+    from app.main import request_limiter
+    request_limiter.reset()
+    yield
+    request_limiter.reset()

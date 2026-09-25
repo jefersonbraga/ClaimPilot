@@ -71,6 +71,7 @@ class Settings:
 
     # Public-demo protection (API layer only; the eval harness is not limited)
     rate_limit_per_minute: int = field(default_factory=lambda: int(os.getenv("RATE_LIMIT_PER_MINUTE", "10")))
+    general_rate_limit_per_minute: int = field(default_factory=lambda: int(os.getenv("GENERAL_RATE_LIMIT_PER_MINUTE", "300")))
     daily_max_analyses: int = field(default_factory=lambda: int(os.getenv("DAILY_MAX_ANALYSES", "300")))
     daily_llm_budget_usd: float = field(default_factory=lambda: _float("DAILY_LLM_BUDGET_USD", 1.0))
 

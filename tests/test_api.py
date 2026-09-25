@@ -45,7 +45,8 @@ def test_malformed_claim_is_rejected(client):
 
 
 def test_unknown_execution_is_404(client):
-    assert client.get("/executions/EXE-nope").status_code == 404
+    assert client.get("/executions/EXE-" + "0" * 32).status_code == 404   # well-formed, unknown
+    assert client.get("/executions/EXE-nope").status_code == 422          # malformed id rejected before lookup
 
 
 def test_analyze_can_stream_per_node_progress(client):

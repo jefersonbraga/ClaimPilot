@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       60 behaviour tests + 9 browser tests for the UI
+tests/                       73 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -303,7 +303,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 60 tests
+pytest                              # 73 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
@@ -367,6 +367,16 @@ LOCAL_API_KEY=...                           # if the server requires one
 | Claim field sizes | bounded in the schema | (422 on oversized input) |
 
 When a limit is hit the API returns `429` before any LLM call, and `/health` shows current usage. The counters live in process memory, which is enough for one container; several replicas would need a shared store. Also set a **hard monthly spend limit on the key itself** in the provider's dashboard, ideally with a dedicated key for this demo. That is the backstop if everything else fails.
+
+### Security
+
+Hardened along OWASP guidance:
+- secure headers, including a strict CSP with no inline scripts;
+- request-size and per-IP rate limits, 128-bit shareable IDs and generic errors;
+- dependency auditing in CI;
+- prompt-injection resistance, because the model cannot override the rules.
+
+The full mapping to the OWASP Top 10, the API Security Top 10 and the **LLM Top 10**, with the accepted residual risks, is in **[SECURITY.md](SECURITY.md)**.
 
 ### Execution history and privacy in the public demo
 

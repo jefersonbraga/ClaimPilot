@@ -415,7 +415,8 @@ function renderDecision(d) {
   $("#verdict-sub").textContent = v.sub;
 
   const conf = Math.round(d.confidence * 100);
-  $("#confidence").innerHTML = `${conf}%<span class="conf-bar ${d.confidence < 0.8 ? "low" : ""}"><i style="width:${conf}%"></i></span>`;
+  $("#confidence").innerHTML = `${conf}%<span class="conf-bar ${d.confidence < 0.8 ? "low" : ""}"><i></i></span>`;
+  $("#confidence .conf-bar i").style.width = `${conf}%`;  // CSSOM, not an inline style attribute (strict CSP)
   $("#risk").innerHTML = `<span class="tag ${esc(d.risk_level)}">${esc(d.risk_level)}</span>`;
   // A PASS can follow a failed check when an exemption rescued it (e.g. PA missing, emergency exemption applies).
   const rescued = d.deterministic_outcome === "PASS" && d.tool_results.some((t) => t.outcome === "FAIL");

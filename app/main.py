@@ -8,16 +8,17 @@ from functools import lru_cache
 from pathlib import Path
 from statistics import mean
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import DATA_DIR, PROVIDERS, ROOT_DIR, WORKFLOW_VERSION, Settings, get_settings, local_health_url
 from app.llm.client import endpoint_healthy, get_llm
-from app.limits import UsageGuard
+from app import security
+from app.limits import RequestRateLimiter, UsageGuard
 from app.llm.prompts import PROMPT_VERSION
 from app.models.domain import Claim, ClaimDecision, ExecutionRecord
-from app.observability.audit import AuditStore
+from app.observability.audit import AuditStore, log_event
 from app.retrieval.policy_store import get_policy_store
 from app.workflows.claim_graph import ClaimInvestigator
 
@@ -25,6 +26,7 @@ app = FastAPI(
     title="ClaimPilot — Healthcare Claims AI Investigator",
     description="AI-assisted investigation of synthetic claims exceptions. Synthetic data only. Not a claims adjudication system.",
     version="0.1.0",
+    redoc_url=None,  # unused second docs UI; less surface (OWASP: minimize exposed endpoints)
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -56,6 +58,15 @@ async def anonymous_visitor(request: Request, call_next):
 
 def current_visitor(request: Request) -> str:
     return request.state.visitor
+
+
+# Registered after the visitor middleware, so it is the outermost layer: headers land on every response,
+# including rate-limit and size rejections.
+request_limiter = RequestRateLimiter(get_settings().general_rate_limit_per_minute)
+security.install(app, request_limiter)
+
+EXECUTION_ID = r"^EXE-[0-9a-f]{12,32}$"
+CLAIM_ID = r"^[A-Za-z0-9._-]{1,40}$"
 
 
 @lru_cache(maxsize=1)
@@ -151,11 +162,14 @@ def _progress_events(investigator: ClaimInvestigator, claim: Claim, guard: Usage
             else:
                 yield json.dumps({"event": "node", **payload}) + "\n"
     except Exception as e:  # the HTTP status is already 200 once streaming starts; report failure in-band
-        yield json.dumps({"event": "error", "detail": f"{type(e).__name__}: {e}"}) + "\n"
+        # Details stay server-side (OWASP A05: no internal error details to clients).
+        log_event("analysis_stream_failed", error_type=type(e).__name__, error=str(e)[:500])
+        yield json.dumps({"event": "error", "detail": "The analysis failed unexpectedly. Please try again."}) + "\n"
 
 
 @app.get("/claims/{claim_id}/audit", response_model=list[ExecutionRecord])
-def claim_audit(claim_id: str, audit: AuditStore = Depends(get_audit_store), visitor: str = Depends(current_visitor)):
+def claim_audit(claim_id: str = PathParam(pattern=CLAIM_ID), audit: AuditStore = Depends(get_audit_store),
+                visitor: str = Depends(current_visitor)):
     """Every execution of this claim made by you (this browser / cookie jar), oldest first."""
     records = audit.for_claim(claim_id, visitor=visitor)
     if not records:
@@ -164,7 +178,7 @@ def claim_audit(claim_id: str, audit: AuditStore = Depends(get_audit_store), vis
 
 
 @app.get("/executions", tags=["history"])
-def execution_history(limit: int = Query(20, ge=1, le=100), claim_id: str | None = Query(None, max_length=40),
+def execution_history(limit: int = Query(20, ge=1, le=100), claim_id: str | None = Query(None, pattern=CLAIM_ID),
                       audit: AuditStore = Depends(get_audit_store), visitor: str = Depends(current_visitor)):
     """Your recent executions, newest first: outcome, model and cost per run. Open one with /executions/{id}.
     Free-text claim fields are left out of the list; the full record is in the replay."""
@@ -179,7 +193,7 @@ def execution_history(limit: int = Query(20, ge=1, le=100), claim_id: str | None
 
 
 @app.get("/executions/{execution_id}", response_model=ExecutionRecord)
-def replay_execution(execution_id: str, audit: AuditStore = Depends(get_audit_store)):
+def replay_execution(execution_id: str = PathParam(pattern=EXECUTION_ID), audit: AuditStore = Depends(get_audit_store)):
     """Decision replay: evidence, policy versions, tool results, model/prompt/workflow versions and routing trail.
     Anyone with the (unguessable) execution ID can open it, so a single decision can be shared by link."""
     record = audit.get(execution_id)

@@ -19,7 +19,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
-      - name: Unit, workflow, guardrail and API tests
+      - name: Dependency vulnerability audit (OWASP A06)
+        run: pip install pip-audit && pip-audit -r requirements.txt --progress-spinner off
+      - name: Unit, workflow, guardrail, API and security tests
         run: python -m pytest
       - name: Evaluation suite (mock model) — fails on any unsafe action or failed case
         run: python -m evals.run --gate all

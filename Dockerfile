@@ -23,4 +23,4 @@ HEALTHCHECK CMD python -c "import os, urllib.request; urllib.request.urlopen(f'h
 # PORT is injected by hosting platforms (Railway, Cloud Run, Render...); 8000 locally.
 # --proxy-headers: behind a hosting proxy take the client IP from X-Forwarded-For, so the per-client rate limit
 # applies per visitor instead of to the proxy. Daily caps still bound any spoofing.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*'"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*' --no-server-header"]

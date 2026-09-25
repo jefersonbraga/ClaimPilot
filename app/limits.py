@@ -72,3 +72,28 @@ class UsageGuard:
                 "daily_llm_budget_usd": {"spent": round(self._spent, 4), "limit": self.daily_budget_usd}
                 if self.counts_spend else "not applicable (mock provider)",
             }
+
+
+class RequestRateLimiter:
+    """Per-client sliding-window limit across every route (OWASP API4). Generous by design: a page load makes
+    ~10 requests; this only stops scripted hammering of cheap endpoints such as /executions/{id}."""
+
+    def __init__(self, per_minute: int):
+        self.per_minute = per_minute
+        self._lock = threading.Lock()
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
+
+    def allow(self, client: str) -> bool:
+        with self._lock:
+            now = time.monotonic()
+            window = self._hits[client]
+            while window and now - window[0] > 60:
+                window.popleft()
+            if len(window) >= self.per_minute:
+                return False
+            window.append(now)
+            return True
+
+    def reset(self) -> None:
+        with self._lock:
+            self._hits.clear()

@@ -302,7 +302,7 @@ class ClaimInvestigator:
 
     @staticmethod
     def _initial_state(claim: Claim, visitor: str | None = None) -> dict:
-        return {"execution_id": f"EXE-{uuid.uuid4().hex[:12]}", "started_at": time.perf_counter(), "claim": claim,
+        return {"execution_id": f"EXE-{uuid.uuid4().hex}", "started_at": time.perf_counter(), "claim": claim,
                 "tool_results": [], "effective_outcomes": [], "retrieval_queries": [], "routing_trail": [],
                 "visitor": visitor}
 
