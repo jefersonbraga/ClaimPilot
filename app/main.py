@@ -11,7 +11,9 @@ from statistics import mean
 
 from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import DATA_DIR, PROVIDERS, ROOT_DIR, WORKFLOW_VERSION, Settings, get_settings, local_health_url
 from app.llm.client import endpoint_healthy, get_llm
@@ -66,6 +68,26 @@ def current_visitor(request: Request) -> str:
 # including rate-limit and size rejections.
 request_limiter = RequestRateLimiter(get_settings().general_rate_limit_per_minute)
 security.install(app, request_limiter)
+
+# Browser navigation gets a branded page; API clients keep JSON errors.
+ADMIN_DISABLED_MESSAGE = "The private usage dashboard is not enabled on this deployment."
+
+
+@app.exception_handler(StarletteHTTPException)
+async def friendly_http_errors(request: Request, exc: StarletteHTTPException):
+    if security.wants_html(request):
+        message = ADMIN_DISABLED_MESSAGE if request.url.path == "/admin" and exc.status_code == 404 else None
+        return security.error_page(exc.status_code, message)
+    return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(Exception)
+async def unexpected_errors(request: Request, exc: Exception):
+    log_event("unhandled_error", path=request.url.path, error_type=type(exc).__name__)  # details stay server-side
+    if security.wants_html(request):
+        return security.error_page(500)
+    return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+
 
 EXECUTION_ID = r"^EXE-[0-9a-f]{12,32}$"
 CLAIM_ID = r"^[A-Za-z0-9._-]{1,40}$"

@@ -8,8 +8,10 @@ One middleware, applied to every response (including early rejections):
   * a general per-client request rate limit across all routes, on top of the stricter analysis limit
 """
 
+import html
+
 from fastapi import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.limits import RequestRateLimiter
 
@@ -31,6 +33,37 @@ PERMISSIONS_POLICY = (
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), "
     "payment=(), usb=(), browsing-topics=()"
 )
+
+
+# ---------------------------------------------------------------------------- friendly error pages
+
+API_PREFIXES = ("/claims", "/executions", "/health", "/metrics", "/demo", "/evals", "/admin/", "/static", "/openapi.json")
+_ERROR_TEMPLATE = None
+ERROR_COPY = {
+    404: ("Page not found", "There's nothing at this address. The workbench and all demo scenarios are on the home page."),
+    405: ("Not allowed", "This address doesn't accept that kind of request."),
+    429: ("Slow down a little", "Too many requests from your connection in a short time. Wait a minute and try again. "
+                                 "The public demo is rate-limited to keep it available and within budget."),
+    500: ("Something went wrong", "An unexpected error occurred. Nothing was changed. Please try again in a moment."),
+}
+
+
+def wants_html(request: Request) -> bool:
+    """A person navigating in a browser, not an API client (fetch/curl/SDK get JSON errors as usual)."""
+    path = request.url.path
+    return (request.method == "GET" and "text/html" in request.headers.get("accept", "")
+            and not path.startswith(API_PREFIXES))
+
+
+def error_page(status: int, message: str | None = None) -> HTMLResponse:
+    global _ERROR_TEMPLATE
+    if _ERROR_TEMPLATE is None:
+        from app.main import STATIC_DIR  # late import: avoid a cycle at module load
+        _ERROR_TEMPLATE = (STATIC_DIR / "error.html").read_text()
+    title, default = ERROR_COPY.get(status, ERROR_COPY[500] if status >= 500 else ERROR_COPY[404])
+    page = (_ERROR_TEMPLATE.replace("{{code}}", str(status)).replace("{{title}}", html.escape(title))
+            .replace("{{message}}", html.escape(message or default)))
+    return HTMLResponse(page, status_code=status)
 
 
 def _is_api(path: str) -> bool:
@@ -73,6 +106,10 @@ def install(app, limiter: RequestRateLimiter) -> None:
 def _reject(request: Request, limiter: RequestRateLimiter) -> JSONResponse | None:
     client = request.client.host if request.client else "unknown"
     if not limiter.allow(client):
+        if wants_html(request):
+            response = error_page(429)
+            response.headers["Retry-After"] = "60"
+            return response
         return JSONResponse({"detail": "Too many requests. Please slow down."}, status_code=429,
                             headers={"Retry-After": "60"})
     if request.method in ("POST", "PUT", "PATCH"):

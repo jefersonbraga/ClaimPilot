@@ -100,3 +100,38 @@ def test_stream_failures_do_not_leak_internal_details(client, make_investigator)
     r = client.post("/claims/analyze", json=CLAIM, headers={"Accept": "application/x-ndjson"})
     event = json.loads(r.text.strip().splitlines()[-1])
     assert event["event"] == "error" and "10.0.0.5" not in event["detail"] and "secret" not in event["detail"]
+
+
+BROWSER_NAV = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
+
+
+def test_browser_navigation_gets_a_branded_error_page(client):
+    r = client.get("/no-such-page", headers=BROWSER_NAV)
+    assert r.status_code == 404 and r.headers["content-type"].startswith("text/html")
+    assert "Page not found" in r.text and 'href="/"' in r.text
+    assert "unsafe-inline" not in r.headers["content-security-policy"]  # the error page obeys the strict CSP
+
+
+def test_api_clients_keep_json_errors(client):
+    assert client.get("/no-such-page").json() == {"detail": "Not Found"}              # fetch/curl default Accept
+    r = client.get("/executions/EXE-" + "0" * 32, headers=BROWSER_NAV)                   # API path, even from a browser
+    assert r.status_code == 404 and r.headers["content-type"].startswith("application/json")
+
+
+def test_disabled_admin_explains_itself_in_the_browser(client, monkeypatch):
+    monkeypatch.delenv("ADMIN_TOKEN", raising=False)
+    r = client.get("/admin", headers=BROWSER_NAV)
+    assert r.status_code == 404 and "usage dashboard is not enabled" in r.text
+
+
+def test_rate_limited_browser_sees_a_page_not_json(client, monkeypatch):
+    monkeypatch.setattr(request_limiter, "per_minute", 1)
+    client.get("/", headers=BROWSER_NAV)
+    r = client.get("/", headers=BROWSER_NAV)
+    assert r.status_code == 429 and "Slow down" in r.text and r.headers["retry-after"] == "60"
+
+
+def test_error_page_escapes_its_content():
+    from app.security import error_page
+    page = error_page(404, "<script>alert(1)</script>").body.decode()
+    assert "<script>alert(1)</script>" not in page and "&lt;script&gt;" in page
