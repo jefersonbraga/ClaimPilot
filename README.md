@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       87 behaviour tests + 9 browser tests for the UI
+tests/                       89 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -303,7 +303,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 87 tests
+pytest                              # 89 tests
 python -m evals.run                 # 21-case evaluation
 ```
 

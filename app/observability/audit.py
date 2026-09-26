@@ -26,10 +26,25 @@ def log_event(event: str, **fields) -> None:
     _logger.info(json.dumps({"ts": datetime.now(timezone.utc).isoformat(), "event": event, **fields}, default=str))
 
 
+def connect(path: str) -> sqlite3.Connection:
+    """SQLite connection shared by the audit store and usage analytics (same file, separate connections).
+
+    * autocommit (isolation_level=None): no statement can leave a transaction open and hold the write lock;
+      a forgotten commit once locked every audit INSERT with "database is locked" (see tests/test_sqlite_concurrency.py)
+    * WAL: readers never block the writer and vice versa
+    * busy_timeout: brief waits instead of immediate errors under concurrent writes
+    """
+    conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None, timeout=10)
+    if path != ":memory:":
+        conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
+    return conn
+
+
 class AuditStore:
     def __init__(self, path: str):
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn = connect(path)
         self._conn.execute(
             """CREATE TABLE IF NOT EXISTS executions (
                    execution_id TEXT PRIMARY KEY,

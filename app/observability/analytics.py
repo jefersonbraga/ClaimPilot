@@ -39,7 +39,9 @@ def referrer_host(referer: str | None, own_host: str) -> str | None:
 class Analytics:
     def __init__(self, path: str):
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        from app.observability.audit import connect  # same hardened settings as the audit store (same file)
+
+        self._conn = connect(path)
         self._conn.execute(
             """CREATE TABLE IF NOT EXISTS usage_events (
                    ts TEXT NOT NULL, day TEXT NOT NULL, visitor TEXT NOT NULL,
