@@ -36,6 +36,14 @@ async function load() {
     [s.replay_views, "Replays opened"],
   ];
   $("#kpis").innerHTML = kpis.map(([v, k]) => `<div class="metric"><div class="metric-v">${esc(v)}</div><div class="metric-k">${esc(k)}</div></div>`).join("");
+  $("#funnel").innerHTML = s.funnel.map((f) => `
+    <li><span class="funnel-step">${esc(f.step)}</span>
+      <span class="funnel-bar"><i data-pct="${Number(f.pct) || 0}"></i></span>
+      <span class="funnel-num"><b>${esc(f.visitors)}</b> · ${esc(f.pct)}%</span></li>`).join("");
+  // Widths via CSSOM (the strict CSP forbids inline style attributes).
+  document.querySelectorAll("#funnel i[data-pct]").forEach((i) => { i.style.width = `${Math.min(100, Number(i.dataset.pct))}%`; });
+  $("#scenarios").innerHTML = table(["Scenario", "Analyses"], s.scenarios_analyzed.map((x) => [x.scenario, x.analyses]));
+  $("#features").innerHTML = table(["Feature", "Detail", "Uses"], s.features_used.map((x) => [x.feature, x.detail, x.uses]));
   $("#daily").innerHTML = table(["Day", "Visitors", "Page views", "Analyses"], s.daily.map((d) => [d.day, d.visitors, d.page_views, d.analyses]));
   $("#referrers").innerHTML = table(["Source", "Visitors"], s.referrers.map((r) => [r.host, r.visitors]));
   $("#models").innerHTML = table(["Model", "Analyses"], s.analyses_by_model.map((m) => [m.model, m.count]));

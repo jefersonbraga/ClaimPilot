@@ -68,6 +68,7 @@ The container also runs uvicorn with `--no-server-header`, and the unused `/redo
 
 - **First-party only.** No third-party analytics scripts and no IP addresses; the only visitor key is the hashed anonymous cookie. Referrers are reduced to their host, and events older than 400 days are purged.
 - **`/admin` does not exist (404) unless `ADMIN_TOKEN` is set with at least 24 characters.** The token is checked in constant time and accepted only as a `Bearer` header, never in the URL. Failed attempts are logged. Responses are `no-store` and `noindex`. The dashboard keeps the token in `sessionStorage` for the current tab only.
+- **Funnel events are allowlisted.** The workbench may report only named actions from a fixed list, with an optional short slug. Free text, coordinates and unknown fields are rejected (422). There is no heatmap or session recording, and the dashboard shows aggregates only.
 - The owner's "don't count this browser" flag is an `HttpOnly`, `SameSite=Strict` cookie, set only by an authenticated call.
 
 ## Residual risks (accepted for a public demo)

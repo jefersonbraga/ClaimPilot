@@ -513,3 +513,12 @@ kbd { font: 11px var(--mono); border: 1px solid var(--border-strong); border-bot
 .error-message { color: var(--text-2); font-size: 16px; margin: 10px 0 24px; }
 .error-actions { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
 .error-actions .btn-primary { width: auto; padding: 0 20px; text-decoration: none; }
+
+.funnel-card { padding-bottom: 8px !important; }
+.funnel { list-style: none; margin: 8px 0 0; padding: 0 18px 10px; display: flex; flex-direction: column; gap: 8px; }
+.funnel li { display: grid; grid-template-columns: minmax(180px, 280px) 1fr 110px; gap: 14px; align-items: center; font-size: 13.5px; }
+.funnel-bar { height: 10px; background: var(--slate-bg); border-radius: 99px; overflow: hidden; }
+.funnel-bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
+.funnel-num { text-align: right; color: var(--text-2); font-family: var(--mono); font-size: 12px; }
+.funnel-num b { color: var(--text); }
+@media (max-width: 640px) { .funnel li { grid-template-columns: 1fr; gap: 4px; } .funnel-num { text-align: left; } }

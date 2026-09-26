@@ -92,3 +92,38 @@ def test_health_reports_dashboard_state_without_revealing_the_token(client, monk
     assert state == "disabled: ADMIN_TOKEN too short (9 chars, need 24+)" and "zq9secret" not in state
     monkeypatch.delenv("ADMIN_TOKEN")
     assert client.get("/health").json()["admin_dashboard"] == "disabled: ADMIN_TOKEN not set"
+
+
+def test_aggregate_funnel_from_allowlisted_ui_events(client):
+    other = TestClient(app, base_url="https://claimpilot.example", headers=BROWSER)
+    for c in (client, other):
+        c.get("/")
+    # Visitor 1 goes all the way; visitor 2 only visits.
+    client.post("/claims/analyze", json=CLAIM)
+    client.post("/events", json={"name": "scenario_analyzed", "detail": "ambiguous-emergency"})
+    client.post("/events", json={"name": "scenario_analyzed", "detail": "emergency-confirmed"})
+    client.post("/events", json={"name": "replay_opened"})
+    client.post("/events", json={"name": "link_copied"})
+
+    funnel = {f["step"]: (f["visitors"], f["pct"]) for f in stats(client)["funnel"]}
+    assert funnel["Visited the demo"] == (2, 100)
+    assert funnel["Ran an analysis"] == (1, 50)
+    assert funnel["Then ran Emergency Confirmed"] == (1, 50)
+    assert funnel["Opened a decision replay"] == (1, 50)
+    assert funnel["Compared two models"] == (0, 0)
+    assert {"scenario": "ambiguous-emergency", "analyses": 1} in stats(client)["scenarios_analyzed"]
+
+
+def test_ui_events_are_allowlisted_and_carry_no_free_text(client):
+    assert client.post("/events", json={"name": "replay_opened"}).status_code == 204
+    assert client.post("/events", json={"name": "mouse_moved", "detail": "x-120"}).status_code == 422
+    assert client.post("/events", json={"name": "model_selected", "detail": "Hello <b>there</b>"}).status_code == 422
+    assert client.post("/events", json={"name": "replay_opened", "x": 10, "y": 20}).status_code == 422  # no coordinates
+
+
+def test_the_workbench_automatic_replay_fetch_is_not_counted_as_a_replay_view(client):
+    run = client.post("/claims/analyze", json=CLAIM).json()
+    client.get(f"/executions/{run['execution_id']}", headers={"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors"})
+    assert stats(client)["replay_views"] == 0
+    client.get(f"/executions/{run['execution_id']}")  # a direct/API open
+    assert stats(client)["replay_views"] == 1

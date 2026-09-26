@@ -76,6 +76,7 @@ class Analytics:
             by_detail = lambda kind: q(  # noqa: E731
                 "SELECT detail, COUNT(*) FROM usage_events WHERE day >= ? AND kind = ? GROUP BY detail ORDER BY 2 DESC LIMIT 15",
                 kind)
+            funnel, scenarios, features = self._funnel(since)
             recent = self._conn.execute(
                 "SELECT ts, kind, detail, referrer, visitor FROM usage_events ORDER BY ts DESC LIMIT 25").fetchall()
         return {
@@ -90,5 +91,39 @@ class Analytics:
             "referrers": [{"host": h, "visitors": n} for h, n in referrers],
             "analyses_by_model": [{"model": d, "count": n} for d, n in by_detail("analysis")],
             "automated_traffic": [{"agent": d, "hits": n} for d, n in by_detail("automated")],
+            "funnel": funnel,
+            "scenarios_analyzed": scenarios,
+            "features_used": features,
             "recent": [{"ts": t, "kind": k, "detail": d, "referrer": r, "visitor": v[:8]} for t, k, d, r, v in recent],
         }
+
+    def _funnel(self, since: str) -> tuple[list[dict], list[dict], list[dict]]:
+        """Distinct visitors reaching each step. Aggregate only: no per-visitor output leaves this method."""
+        def visitors(where: str, *args) -> set[str]:
+            return {v for (v,) in self._conn.execute(
+                f"SELECT DISTINCT visitor FROM usage_events WHERE day >= ? AND {where}", (since, *args))}
+
+        visited = visitors("kind IN ('page_view', 'shared_link_open', 'analysis')")
+        models_per_visitor = self._conn.execute(
+            "SELECT visitor FROM usage_events WHERE day >= ? AND kind = 'analysis' "
+            "GROUP BY visitor HAVING COUNT(DISTINCT detail) >= 2", (since,)).fetchall()
+        steps = [
+            ("Visited the demo", visited),
+            ("Ran an analysis", visitors("kind = 'analysis'")),
+            ("Ran the ambiguous emergency case", visitors("kind = 'ui.scenario_analyzed' AND detail = 'ambiguous-emergency'")),
+            ("Then ran Emergency Confirmed", visitors("kind = 'ui.scenario_analyzed' AND detail = 'emergency-confirmed'")
+             & visitors("kind = 'ui.scenario_analyzed' AND detail = 'ambiguous-emergency'")),
+            ("Compared two models", {v for (v,) in models_per_visitor}),
+            ("Opened a decision replay", visitors("kind IN ('ui.replay_opened', 'ui.flow_replayed', 'replay_view')")),
+            ("Reopened a run from history", visitors("kind = 'ui.history_opened'")),
+            ("Copied a share link", visitors("kind = 'ui.link_copied'")),
+        ]
+        base = len(visited) or 1
+        funnel = [{"step": name, "visitors": len(vs), "pct": round(100 * len(vs) / base)} for name, vs in steps]
+        scenarios = [{"scenario": d, "analyses": n} for d, n in self._conn.execute(
+            "SELECT detail, COUNT(*) FROM usage_events WHERE day >= ? AND kind = 'ui.scenario_analyzed' "
+            "GROUP BY detail ORDER BY 2 DESC", (since,))]
+        features = [{"feature": k.removeprefix("ui."), "detail": d or "", "uses": n} for k, d, n in self._conn.execute(
+            "SELECT kind, detail, COUNT(*) FROM usage_events WHERE day >= ? AND kind LIKE 'ui.%' "
+            "AND kind != 'ui.scenario_analyzed' GROUP BY kind, detail ORDER BY 3 DESC", (since,))]
+        return funnel, scenarios, features

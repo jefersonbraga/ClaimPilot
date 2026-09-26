@@ -9,7 +9,10 @@ from functools import lru_cache
 from pathlib import Path
 from statistics import mean
 
-from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Query, Request
+from typing import Literal
+
+from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.staticfiles import StaticFiles
@@ -264,7 +267,11 @@ def replay_execution(request: Request, execution_id: str = PathParam(pattern=EXE
     record = audit.get(execution_id)
     if record is None:
         raise HTTPException(404, f"Execution {execution_id} not found")
-    track(request, analytics, "replay_view")
+    # The workbench fetches the replay automatically after every analysis; that is not a person opening a replay.
+    # Count only direct opens (URL / API client); the UI reports its own "replay_opened" event when a user asks.
+    automatic = request.headers.get("sec-fetch-site") == "same-origin" and request.headers.get("sec-fetch-mode") != "navigate"
+    if not automatic:
+        track(request, analytics, "replay_view")
     return record
 
 
@@ -296,6 +303,26 @@ def demo_ui(request: Request, analytics: Analytics = Depends(get_analytics)):
     shared = "execution" in request.query_params
     track(request, analytics, "shared_link_open" if shared else "page_view", with_referrer=True)
     return FileResponse(STATIC_DIR / "index.html")
+
+
+# --------------------------------------------------------------------------- aggregate funnel events
+
+UI_EVENTS = ("scenario_analyzed", "model_selected", "replay_opened", "flow_replayed", "history_opened", "link_copied")
+
+
+class UIEvent(BaseModel):
+    """What the workbench may report: a fixed list of named actions with an optional short slug.
+    No free text, no coordinates, no timing, no page content (this is a funnel, not a heatmap)."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: Literal[UI_EVENTS]  # type: ignore[valid-type]
+    detail: str | None = Field(None, pattern=r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+@app.post("/events", status_code=204, include_in_schema=False)
+def ui_event(event: UIEvent, request: Request, analytics: Analytics = Depends(get_analytics)):
+    track(request, analytics, f"ui.{event.name}", detail=event.detail)
+    return Response(status_code=204)
 
 
 # --------------------------------------------------------------------------- private usage dashboard

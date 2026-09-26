@@ -43,7 +43,13 @@
         </div>
         <p class="muted" id="notrack-status"></p>
         <div class="eval-grid" id="kpis"></div>
+        <div class="card funnel-card">
+          <div class="card-head"><h2>Funnel</h2><span class="hint">distinct visitors reaching each step · share of all visitors</span></div>
+          <ol class="funnel" id="funnel"></ol>
+        </div>
         <div class="admin-grid">
+          <div class="card"><div class="card-head"><h2>Scenarios analyzed</h2></div><div id="scenarios"></div></div>
+          <div class="card"><div class="card-head"><h2>Features used</h2><span class="hint">replay, history, share, model picker</span></div><div id="features"></div></div>
           <div class="card"><div class="card-head"><h2>Daily</h2></div><div id="daily"></div></div>
           <div class="card"><div class="card-head"><h2>Where visitors came from</h2><span class="hint">referrer host</span></div><div id="referrers"></div></div>
           <div class="card"><div class="card-head"><h2>Analyses by model</h2></div><div id="models"></div></div>

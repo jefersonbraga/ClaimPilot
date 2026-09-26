@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       84 behaviour tests + 9 browser tests for the UI
+tests/                       87 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -303,7 +303,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 84 tests
+pytest                              # 87 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
@@ -375,7 +375,10 @@ When a limit is hit the API returns `429` before any LLM call, and `/health` sho
 - shared decision links opened and replays viewed;
 - where visitors came from (referrer **host** only, e.g. `linkedin.com`);
 - analyses per model;
-- automated traffic (link previews, crawlers, scripts) kept separate from human visitors.
+- automated traffic (link previews, crawlers, scripts) kept separate from human visitors;
+- an **aggregate funnel**: visited → ran an analysis → ran the ambiguous case → then Emergency Confirmed → compared models → opened a replay → reopened from history → copied a share link. It also shows which scenarios and features get used.
+
+The funnel comes from a short **allowlist** of named UI actions (`POST /events`). There is no free text, no click positions and no heatmap, and only aggregates are shown.
 
 There are no third-party scripts, no IP addresses and no personal data. Visitors are counted by the same hashed anonymous cookie that scopes history, and the strict CSP is unchanged. The owner can exclude their own browser.
 

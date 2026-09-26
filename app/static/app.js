@@ -55,6 +55,17 @@ function selectProvider(id) {
   $("#model-hint").textContent = (PROVIDER_INFO[id] || { hint: "" }).hint;
 }
 
+// ------------------------------------------------------------------ aggregate funnel (first-party, allowlisted)
+
+// Reports a named action from a fixed list (see /events). No text, positions or timings: a funnel, not a heatmap.
+function beacon(name, detail) {
+  try {
+    fetch("/events", { method: "POST", headers: { "Content-Type": "application/json" }, keepalive: true,
+      body: JSON.stringify(detail ? { name, detail } : { name }) }).catch(() => {});
+  } catch { /* analytics must never affect the demo */ }
+}
+const sameClaim = (a, b) => Object.keys({ ...a, ...b }).every((k) => (a[k] ?? null) === (b[k] ?? null));
+
 // ------------------------------------------------------------------ API
 
 async function api(path, options) {
@@ -286,6 +297,7 @@ async function analyze() {
     state.last = run;
     state.replay = null;
     render(decision, null, previous);
+    beacon("scenario_analyzed", state.current && state.current.id && sameClaim(state.current.claim, claim) ? state.current.id : "custom");
     markCurrentExecution(decision.execution_id);
     loadHistory();
     if (followed) window.setTimeout(() => $("#results").scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" }), 450);
@@ -688,6 +700,7 @@ function drawFlowEdges() {
 function toggleReplay() {
   if (!state.replay) return;
   const open = $("#replay").hidden;
+  if (open) beacon("replay_opened");
   if (open) renderReplay(state.replay);
   $("#replay").hidden = !open;
   $("#replay-btn").setAttribute("aria-expanded", String(open));
@@ -813,7 +826,6 @@ async function openExecution(id, { scroll = true } = {}) {
   }
   hideError();
   // Stored claims include explicit nulls that scenario files omit; treat missing as null when matching.
-  const sameClaim = (a, b) => Object.keys({ ...a, ...b }).every((k) => (a[k] ?? null) === (b[k] ?? null));
   const match = state.scenarios.find((s) => sameClaim(s.claim, r.claim));
   if (match) selectScenario(match.id, false);
   else {
@@ -835,6 +847,7 @@ async function openExecution(id, { scroll = true } = {}) {
 }
 
 async function copyExecutionLink(id, button) {
+  beacon("link_copied");
   try {
     await navigator.clipboard.writeText(executionLink(id));
     button.textContent = "Copied ✓";
@@ -899,7 +912,7 @@ async function loadVersions() {
 document.addEventListener("DOMContentLoaded", () => {
   $("#analyze").addEventListener("click", analyze);
   $("#retry-replay").addEventListener("click", retryReplay);
-  $("#flow-play").addEventListener("click", playFlow);
+  $("#flow-play").addEventListener("click", () => { if (!flow.timer && flow.index === -1) beacon("flow_replayed"); playFlow(); });
   $("#flow-restart").addEventListener("click", restartFlow);
   document.querySelectorAll("#flow [data-step]").forEach((node) => node.querySelector("button").addEventListener("click", () => {
     if (flow.timer) playFlow();
@@ -919,13 +932,13 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#model-options").addEventListener("click", (e) => {
     const b = e.target.closest("[data-provider]");
-    if (b && !state.busy) selectProvider(b.dataset.provider);
+    if (b && !state.busy) { selectProvider(b.dataset.provider); beacon("model_selected", b.dataset.provider); }
   });
   $("#history-refresh").addEventListener("click", loadHistory);
   $("#history-filter").addEventListener("change", loadHistory);
   $("#history-list").addEventListener("click", (e) => {
     const open = e.target.closest("[data-open]"), copy = e.target.closest("[data-copy]");
-    if (open) openExecution(open.dataset.open);
+    if (open) { beacon("history_opened"); openExecution(open.dataset.open); }
     if (copy) copyExecutionLink(copy.dataset.copy, copy);
   });
   // A shared link (/?execution=EXE-…) opens that decision once the scenarios have loaded.
