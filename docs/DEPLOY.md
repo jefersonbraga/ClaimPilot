@@ -39,12 +39,22 @@ One-time setup, about 10 minutes, in the Railway dashboard:
    | `RATE_LIMIT_PER_MINUTE` | `10` |
    | `DAILY_MAX_ANALYSES` | `300` |
 
+   | `ADMIN_TOKEN` | optional: enables the private usage dashboard at `/admin` (≥ 24 chars) |
+
    Without a key the app still runs, on the deterministic mock model. Every provider with a key appears in the UI's *Model* picker, with `LLM_PROVIDER` as the default. Budget and rate limits apply to the total across providers.
 3. **Service → Settings → Source:** branch `main`, and turn on **Wait for CI**.
 4. **Service → Settings → Networking → Generate Domain.** This is the public URL to put at the top of the README.
 5. Keep **one replica**, which is the default. The rate-limit and budget counters live in memory.
 
 After that, every push to `main` goes through CI and then to production.
+
+**Usage dashboard:** generate a token without printing it, paste it into `ADMIN_TOKEN`, then open `/admin` and sign in:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32), end='')" | pbcopy   # macOS; copies to clipboard
+```
+
+Click **Don't count this browser** once, so your own visits don't inflate the numbers.
 
 **Cost control, three layers:**
 - the app's own limits: per-IP rate limit, daily analysis cap, daily LLM budget, bounded output tokens;

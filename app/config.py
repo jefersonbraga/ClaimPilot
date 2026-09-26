@@ -75,6 +75,9 @@ class Settings:
     daily_max_analyses: int = field(default_factory=lambda: int(os.getenv("DAILY_MAX_ANALYSES", "300")))
     daily_llm_budget_usd: float = field(default_factory=lambda: _float("DAILY_LLM_BUDGET_USD", 1.0))
 
+    # Private usage dashboard at /admin (disabled unless a strong token is configured)
+    admin_token: str | None = field(default_factory=lambda: os.getenv("ADMIN_TOKEN") or None)
+
     # Storage
     audit_db_path: str = field(default_factory=lambda: os.getenv("AUDIT_DB_PATH", str(ROOT_DIR / "claimpilot.db")))
 

@@ -490,3 +490,17 @@ kbd { font: 11px var(--mono); border: 1px solid var(--border-strong); border-bot
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation-duration: 0s !important; scroll-behavior: auto !important; }
 }
+
+/* ---------------------------------------------------------------- private usage dashboard */
+.admin { display: flex; flex-direction: column; gap: 16px; }
+.admin-login { max-width: 420px; display: flex; flex-direction: column; gap: 10px; }
+.admin-login h2 { font-size: 18px; }
+.admin-login input { font: inherit; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.admin-login input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.admin-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.admin-actions select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.admin-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-grid .card, .admin .card { padding: 0; overflow: hidden; }
+.admin .card-head { padding: 14px 18px 0; }
+@media (max-width: 920px) { .admin-grid { grid-template-columns: minmax(0, 1fr); } }
+.admin .card.admin-login { padding: 22px; }

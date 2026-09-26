@@ -1,6 +1,7 @@
 """FastAPI entrypoint."""
 
 import hashlib
+import hmac
 import json
 import re
 import secrets
@@ -9,7 +10,7 @@ from pathlib import Path
 from statistics import mean
 
 from fastapi import Depends, FastAPI, HTTPException, Path as PathParam, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import DATA_DIR, PROVIDERS, ROOT_DIR, WORKFLOW_VERSION, Settings, get_settings, local_health_url
@@ -18,6 +19,7 @@ from app import security
 from app.limits import RequestRateLimiter, UsageGuard
 from app.llm.prompts import PROMPT_VERSION
 from app.models.domain import Claim, ClaimDecision, ExecutionRecord
+from app.observability.analytics import Analytics, classify_agent, referrer_host
 from app.observability.audit import AuditStore, log_event
 from app.retrieval.policy_store import get_policy_store
 from app.workflows.claim_graph import ClaimInvestigator
@@ -72,6 +74,29 @@ CLAIM_ID = r"^[A-Za-z0-9._-]{1,40}$"
 @lru_cache(maxsize=1)
 def get_audit_store() -> AuditStore:
     return AuditStore(get_settings().audit_db_path)
+
+
+@lru_cache(maxsize=1)
+def get_analytics() -> Analytics:
+    return Analytics(get_settings().audit_db_path)
+
+
+NOTRACK_COOKIE = "cp_notrack"
+
+
+def track(request: Request, analytics: Analytics, kind: str, detail: str | None = None, with_referrer: bool = False):
+    """Record one anonymous usage event. Never raises: analytics must not affect the product."""
+    try:
+        if request.cookies.get(NOTRACK_COOKIE) == "1":
+            return
+        agent = classify_agent(request.headers.get("user-agent"))
+        if agent:  # crawlers, link previews, scripts: kept apart so they never count as visitors
+            analytics.record("automated", request.state.visitor, detail=agent)
+            return
+        ref = referrer_host(request.headers.get("referer"), request.url.hostname or "") if with_referrer else None
+        analytics.record(kind, request.state.visitor, detail=detail, referrer=ref)
+    except Exception as e:  # pragma: no cover - defensive
+        log_event("analytics_failed", error_type=type(e).__name__)
 
 
 @lru_cache(maxsize=1)
@@ -139,25 +164,31 @@ def health(investigator: ClaimInvestigator = Depends(get_investigator), guard: U
 def analyze_claim(claim: Claim, request: Request, investigator: ClaimInvestigator = Depends(get_investigator),
                   guard: UsageGuard = Depends(get_usage_guard), visitor: str = Depends(current_visitor),
                   select_investigator=Depends(get_investigator_selector),
+                  analytics: Analytics = Depends(get_analytics),
                   provider: str | None = Query(None, pattern=r"^[a-z]{2,20}$",
                                                description="Model provider for this analysis (see /health available_providers); default when omitted")):
     if provider and provider != investigator.llm.provider:
         investigator = select_investigator(provider)  # same workflow, rules and guardrails; only the model changes
     guard.check(request.client.host if request.client else "unknown")  # 429 before any LLM spend
+    model_label = f"{investigator.llm.provider} · {investigator.llm.model}"
+    on_done = lambda: track(request, analytics, "analysis", detail=model_label)  # noqa: E731
     if "application/x-ndjson" in request.headers.get("accept", ""):
         # Same endpoint, same workflow; the client opted into per-node progress events (used by the demo UI).
-        return StreamingResponse(_progress_events(investigator, claim, guard, visitor), media_type="application/x-ndjson")
+        return StreamingResponse(_progress_events(investigator, claim, guard, visitor, on_done),
+                                 media_type="application/x-ndjson")
     decision = investigator.investigate(claim, visitor=visitor)
     guard.record(decision.estimated_cost)
+    on_done()
     return decision
 
 
-def _progress_events(investigator: ClaimInvestigator, claim: Claim, guard: UsageGuard, visitor: str):
+def _progress_events(investigator: ClaimInvestigator, claim: Claim, guard: UsageGuard, visitor: str, on_done=lambda: None):
     """NDJSON stream: {"event": "node", ...} per completed workflow node, then {"event": "decision", ...}."""
     try:
         for kind, payload in investigator.investigate_stream(claim, visitor=visitor):
             if kind == "decision":
                 guard.record(payload.estimated_cost)
+                on_done()
                 yield json.dumps({"event": "decision", "decision": payload.model_dump(mode="json")}) + "\n"
             else:
                 yield json.dumps({"event": "node", **payload}) + "\n"
@@ -193,12 +224,14 @@ def execution_history(limit: int = Query(20, ge=1, le=100), claim_id: str | None
 
 
 @app.get("/executions/{execution_id}", response_model=ExecutionRecord)
-def replay_execution(execution_id: str = PathParam(pattern=EXECUTION_ID), audit: AuditStore = Depends(get_audit_store)):
+def replay_execution(request: Request, execution_id: str = PathParam(pattern=EXECUTION_ID),
+                     audit: AuditStore = Depends(get_audit_store), analytics: Analytics = Depends(get_analytics)):
     """Decision replay: evidence, policy versions, tool results, model/prompt/workflow versions and routing trail.
     Anyone with the (unguessable) execution ID can open it, so a single decision can be shared by link."""
     record = audit.get(execution_id)
     if record is None:
         raise HTTPException(404, f"Execution {execution_id} not found")
+    track(request, analytics, "replay_view")
     return record
 
 
@@ -225,9 +258,54 @@ def metrics(audit: AuditStore = Depends(get_audit_store)):
 
 
 @app.get("/", include_in_schema=False)
-def demo_ui():
+def demo_ui(request: Request, analytics: Analytics = Depends(get_analytics)):
     """Single-page demo workbench (plain HTML/CSS/JS in app/static). It only calls the public API."""
+    shared = "execution" in request.query_params
+    track(request, analytics, "shared_link_open" if shared else "page_view", with_referrer=True)
     return FileResponse(STATIC_DIR / "index.html")
+
+
+# --------------------------------------------------------------------------- private usage dashboard
+
+
+def require_admin(request: Request) -> None:
+    """Bearer-token gate. Disabled (404) unless ADMIN_TOKEN is set and strong; constant-time comparison."""
+    token = get_settings().admin_token
+    if not token or len(token) < 24:
+        raise HTTPException(404, "Not Found")
+    auth = request.headers.get("authorization", "")
+    supplied = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not hmac.compare_digest(supplied.encode(), token.encode()):
+        log_event("admin_auth_failed")
+        raise HTTPException(401, "Invalid admin token", headers={"WWW-Authenticate": "Bearer"})
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_page():
+    if not (get_settings().admin_token and len(get_settings().admin_token) >= 24):
+        raise HTTPException(404, "Not Found")
+    return FileResponse(STATIC_DIR / "admin.html")
+
+
+@app.get("/admin/stats", include_in_schema=False, dependencies=[Depends(require_admin)])
+def admin_stats(days: int = Query(30, ge=1, le=365), analytics: Analytics = Depends(get_analytics)):
+    return analytics.summary(days)
+
+
+@app.post("/admin/notrack", include_in_schema=False, dependencies=[Depends(require_admin)])
+def admin_notrack(request: Request):
+    """Stop counting this browser (e.g. the owner's own visits)."""
+    response = JSONResponse({"tracking": "disabled for this browser"})
+    response.set_cookie(NOTRACK_COOKIE, "1", max_age=365 * 24 * 3600, httponly=True, samesite="strict",
+                        secure=request.url.scheme == "https", path="/")
+    return response
+
+
+@app.delete("/admin/notrack", include_in_schema=False, dependencies=[Depends(require_admin)])
+def admin_track_again():
+    response = JSONResponse({"tracking": "enabled for this browser"})
+    response.delete_cookie(NOTRACK_COOKIE, path="/")
+    return response
 
 
 @app.get("/demo/scenarios", tags=["demo"])

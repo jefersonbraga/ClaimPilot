@@ -1,5 +1,9 @@
 import json
 import logging
+import os
+
+# Tests never touch the real audit/analytics database (set before the app reads settings).
+os.environ["AUDIT_DB_PATH"] = ":memory:"
 
 import pytest
 

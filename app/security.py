@@ -56,6 +56,9 @@ def _headers(request: Request) -> dict[str, str]:
         headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     if _is_api(request.url.path):
         headers["Cache-Control"] = "no-store"
+    if request.url.path.startswith("/admin"):
+        headers["X-Robots-Tag"] = "noindex, nofollow"
+        headers["Cache-Control"] = "no-store"
     return headers
 
 

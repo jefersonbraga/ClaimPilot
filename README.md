@@ -112,7 +112,7 @@ app/
 data/                        10 synthetic policies, members, authorizations, history, demo claims
 evals/                       21-case evaluation harness + committed real-model run
   static/                    demo workbench UI (plain HTML/CSS/JS, served at /)
-tests/                       73 behaviour tests + 9 browser tests for the UI
+tests/                       78 behaviour tests + 9 browser tests for the UI
 scripts/demo.sh              2–3 minute scripted demo (terminal)
 .github/workflows/ci.yml     CI: tests, evaluation gate, browser tests, Docker health
 railway.json                 deployment settings (Railway)
@@ -303,7 +303,7 @@ python3.12 -m venv .venv && source .venv/bin/activate    # or: uv venv -p 3.12
 pip install -r requirements.txt
 
 uvicorn app.main:app --reload       # http://localhost:8000/docs
-pytest                              # 73 tests
+pytest                              # 78 tests
 python -m evals.run                 # 21-case evaluation
 ```
 
@@ -367,6 +367,17 @@ LOCAL_API_KEY=...                           # if the server requires one
 | Claim field sizes | bounded in the schema | (422 on oversized input) |
 
 When a limit is hit the API returns `429` before any LLM call, and `/health` shows current usage. The counters live in process memory, which is enough for one container; several replicas would need a shared store. Also set a **hard monthly spend limit on the key itself** in the provider's dashboard, ideally with a dedicated key for this demo. That is the backstop if everything else fails.
+
+### Usage analytics (first-party, anonymous)
+
+`/admin` is a private dashboard, enabled only when `ADMIN_TOKEN` is set. It shows:
+- unique visitors, visitors who ran an analysis, page views and analyses per day;
+- shared decision links opened and replays viewed;
+- where visitors came from (referrer **host** only, e.g. `linkedin.com`);
+- analyses per model;
+- automated traffic (link previews, crawlers, scripts) kept separate from human visitors.
+
+There are no third-party scripts, no IP addresses and no personal data. Visitors are counted by the same hashed anonymous cookie that scopes history, and the strict CSP is unchanged. The owner can exclude their own browser.
 
 ### Security
 
