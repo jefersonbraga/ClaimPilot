@@ -157,7 +157,18 @@ def health(investigator: ClaimInvestigator = Depends(get_investigator), guard: U
         "workflow_version": WORKFLOW_VERSION,
         "policies_loaded": len(get_policy_store().policies),
         "demo_limits": guard.status(),
+        "admin_dashboard": admin_status(),
     }
+
+
+def admin_status() -> str:
+    """Whether /admin is enabled, and why not. Never reveals the token (the route itself is public knowledge)."""
+    token = get_settings().admin_token
+    if not token:
+        return "disabled: ADMIN_TOKEN not set"
+    if len(token) < 24:
+        return f"disabled: ADMIN_TOKEN too short ({len(token)} chars, need 24+)"
+    return "enabled"
 
 
 @app.post("/claims/analyze", response_model=ClaimDecision)
@@ -271,7 +282,7 @@ def demo_ui(request: Request, analytics: Analytics = Depends(get_analytics)):
 def require_admin(request: Request) -> None:
     """Bearer-token gate. Disabled (404) unless ADMIN_TOKEN is set and strong; constant-time comparison."""
     token = get_settings().admin_token
-    if not token or len(token) < 24:
+    if admin_status() != "enabled":
         raise HTTPException(404, "Not Found")
     auth = request.headers.get("authorization", "")
     supplied = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
@@ -282,7 +293,7 @@ def require_admin(request: Request) -> None:
 
 @app.get("/admin", include_in_schema=False)
 def admin_page():
-    if not (get_settings().admin_token and len(get_settings().admin_token) >= 24):
+    if admin_status() != "enabled":
         raise HTTPException(404, "Not Found")
     return FileResponse(STATIC_DIR / "admin.html")
 

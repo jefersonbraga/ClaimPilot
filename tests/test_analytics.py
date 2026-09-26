@@ -83,3 +83,12 @@ def test_admin_requires_the_bearer_token(client):
     page = client.get("/admin")
     assert page.status_code == 200 and page.headers["x-robots-tag"] == "noindex, nofollow"
     assert "no-store" in client.get("/admin/stats", headers={"Authorization": f"Bearer {TOKEN}"}).headers["cache-control"]
+
+
+def test_health_reports_dashboard_state_without_revealing_the_token(client, monkeypatch):
+    assert client.get("/health").json()["admin_dashboard"] == "enabled"
+    monkeypatch.setenv("ADMIN_TOKEN", "short")
+    state = client.get("/health").json()["admin_dashboard"]
+    assert state.startswith("disabled: ADMIN_TOKEN too short") and "short" not in state.split("(")[0][-6:]
+    monkeypatch.delenv("ADMIN_TOKEN")
+    assert client.get("/health").json()["admin_dashboard"] == "disabled: ADMIN_TOKEN not set"
