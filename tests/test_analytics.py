@@ -87,8 +87,8 @@ def test_admin_requires_the_bearer_token(client):
 
 def test_health_reports_dashboard_state_without_revealing_the_token(client, monkeypatch):
     assert client.get("/health").json()["admin_dashboard"] == "enabled"
-    monkeypatch.setenv("ADMIN_TOKEN", "short")
+    monkeypatch.setenv("ADMIN_TOKEN", "zq9secret")
     state = client.get("/health").json()["admin_dashboard"]
-    assert state.startswith("disabled: ADMIN_TOKEN too short") and "short" not in state.split("(")[0][-6:]
+    assert state == "disabled: ADMIN_TOKEN too short (9 chars, need 24+)" and "zq9secret" not in state
     monkeypatch.delenv("ADMIN_TOKEN")
     assert client.get("/health").json()["admin_dashboard"] == "disabled: ADMIN_TOKEN not set"
